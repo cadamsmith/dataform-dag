@@ -48,7 +48,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "vscode:prepublish": "npm run build --prefix ../../packages/core && npm run build",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "publish:vsce": "vsce publish --packagePath extension.vsix",
+    "publish:ovsx": "ovsx publish extension.vsix --no-dependencies"
   },
   "dependencies": {
     "@dataform-dag/core": "*",
@@ -63,6 +65,7 @@
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.21.5",
     "jsdom": "^25.0.0",
+    "ovsx": "^0.10.1",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

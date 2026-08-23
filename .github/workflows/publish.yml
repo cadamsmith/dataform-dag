@@ -1,0 +1,59 @@
+name: Publish Extension
+
+# Publishes the VS Code extension to both the Visual Studio Marketplace and
+# Open VSX. Packages the .vsix once and uploads that same artifact to both
+# registries so they stay byte-identical.
+#
+# Triggers:
+#   - Creating a GitHub Release (recommended: tag the release, e.g. v0.1.0,
+#     after bumping apps/extension/package.json "version" to match).
+#   - Manual run from the Actions tab (workflow_dispatch).
+#
+# One-time setup required before the first run — see .github/workflows/PUBLISHING.md.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Install from the repo root so the workspace symlinks (@dataform-dag/core,
+      # @dataform-dag/ui) are wired up before packaging.
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      # `vscode:prepublish` (fired by vsce package) builds core then the extension
+      # bundle. Output is pinned to a fixed name so the publish steps below don't
+      # have to guess the version-stamped filename.
+      - name: Package extension
+        run: npm run package -- -o extension.vsix
+
+      - name: Publish to Visual Studio Marketplace
+        run: npx vsce publish --packagePath extension.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX
+        run: npm run publish:ovsx
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Upload .vsix to the workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataform-dag-vsix
+          path: apps/extension/extension.vsix
