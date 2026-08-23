@@ -32,7 +32,7 @@
   },
   "categories": ["Visualization", "Other"],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": ["onView:dataformDag.nodes"],
   "extensionKind": ["workspace"],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -45,14 +45,74 @@
       {
         "command": "dataformDag.showGraph",
         "title": "Show Graph",
-        "category": "Dataform DAG"
+        "category": "Dataform DAG",
+        "icon": "$(graph)"
       },
       {
         "command": "dataformDag.showCompiledSql",
         "title": "Show Compiled SQL",
-        "category": "Dataform DAG"
+        "category": "Dataform DAG",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "dataformDag.refresh",
+        "title": "Refresh",
+        "category": "Dataform DAG",
+        "icon": "$(refresh)"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dataformDag",
+          "title": "Dataform DAG",
+          "icon": "media/dag.svg"
+        }
+      ]
+    },
+    "views": {
+      "dataformDag": [
+        {
+          "id": "dataformDag.nodes",
+          "name": "Actions",
+          "contextualTitle": "Dataform DAG",
+          "icon": "media/dag.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dataformDag.nodes",
+        "contents": "Open a folder containing a Dataform project to list its actions.\n[Open Folder](command:vscode.openFolder)",
+        "when": "workbenchState == empty"
+      },
+      {
+        "view": "dataformDag.nodes",
+        "contents": "No Dataform actions found.\nThis view lists every action in a `definitions/**/*.sqlx` tree, grouped by type.\n[Refresh](command:dataformDag.refresh)",
+        "when": "workbenchState != empty"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dataformDag.showGraph",
+          "when": "view == dataformDag.nodes",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dataformDag.refresh",
+          "when": "view == dataformDag.nodes",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dataformDag.showCompiledSql",
+          "when": "view == dataformDag.nodes && viewItem == dataformDagNode",
+          "group": "inline"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "node build.mjs",

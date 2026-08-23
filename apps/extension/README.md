@@ -15,6 +15,9 @@ click switches the canvas over to `dataform compile`.
   `tags` — the node count in the top bar tracks what's visible.
 - **Inspect a node.** Click one for its type, tags, file path, and upstream/downstream refs — and
   the SQL Dataform actually compiles it to.
+- **Browse from the sidebar.** The Dataform DAG icon in the activity bar lists every action in the
+  project grouped by type — sources, tables, views, incrementals, assertions, operations — with each
+  one's tags beside it. Click a row to open its file; the canvas follows along when it's open.
 - **Jump straight to the code.** Click through to open a node's `.sqlx` file in the editor.
 - **Follow along as you navigate.** Switch the active editor to a modeled file and its node is
   highlighted on the canvas.
@@ -28,8 +31,9 @@ click switches the canvas over to `dataform compile`.
 ## Getting started
 
 1. Open a Dataform project folder in VS Code (one with a `definitions/**/*.sqlx` tree).
-2. Open the Command Palette (`Cmd`/`Ctrl` + `Shift` + `P`) and run **Dataform DAG: Show Graph**.
-3. The graph opens in a new panel. Click any node to open its file; edit and save to see it update.
+2. Click the **Dataform DAG** icon in the activity bar to browse your actions, or open the Command
+   Palette (`Cmd`/`Ctrl` + `Shift` + `P`) and run **Dataform DAG: Show Graph** for the canvas.
+3. Click any node to open its file; edit and save to see the graph update.
 
 There's a second command, **Dataform DAG: Show Compiled SQL**: run it while editing a `.sqlx` and
 the graph opens focused on that file's node, with its compiled SQL in the detail panel.

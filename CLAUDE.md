@@ -20,6 +20,11 @@ npm run dev:ui       # shared UI standalone against a mock graph
   CSP nonce and would be blocked → elk never runs → the graph silently falls back to dagre/bezier.
   Keep it inlined. (elkjs has no `eval`/`new Function`, so the nonce-only `script-src` runs it
   fine — don't add `'unsafe-eval'` unless a future elk version needs it.)
+- **`GraphStore` is the only thing that builds a graph in the extension** (`src/graphStore.ts`). It
+  owns the `**/*.sqlx` watcher, the compile cache, and the authoritative `GraphMode`; the webview
+  panel and the activity-bar tree are subscribers. Two views computing their own graphs would
+  disagree the moment one switched to compiled mode (16 nodes vs 24). The watcher is disposed with
+  the extension, NOT with the panel — closing the panel must not stop the tree from updating.
 - **`@dataform-dag/core/browser` is the browser-safe entry** (parser + graph only). The main barrel
   (`.`) re-exports `NodeFileSource` (`node:fs`) and `CompiledGraphSource` (`node:child_process`),
   which break a browser bundle. The web host imports from `/browser`. Don't route browser code

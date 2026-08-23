@@ -17,6 +17,8 @@ VS Code extension and a standalone local web app.
   that node on hosts that can compile *(extension)*.
 - **Diagnostics** — unresolved `ref()`s and duplicate node ids surfaced as a panel instead of
   silently dropped edges.
+- **An activity-bar tree** *(extension)* — every action grouped by type in the sidebar, with tags
+  and a click straight to the file, whether or not the canvas is open.
 - **Click through to code, live** *(extension)* — click a node to open its `.sqlx`; switch the
   active editor and its node highlights; save any `.sqlx` and the graph rebuilds.
 - **Compiled mode** *(extension)* — toggle from the regex parser to `dataform compile --json` for a

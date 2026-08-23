@@ -106,10 +106,23 @@ interface WorkspaceFolder {
   uri: { fsPath: string };
 }
 
+interface MockTreeView {
+  id: string;
+  provider: MockTreeDataProvider;
+  dispose: () => void;
+}
+
+/** The slice of `TreeDataProvider` the tests drive — enough to walk the tree the provider builds. */
+interface MockTreeDataProvider {
+  getTreeItem: (element: unknown) => unknown;
+  getChildren: (element?: unknown) => unknown;
+}
+
 interface Records {
   commands: Map<string, (...args: unknown[]) => unknown>;
   panels: MockPanel[];
   watchers: MockWatcher[];
+  treeViews: MockTreeView[];
   activeEditorHandlers: Array<(editor: unknown) => void>;
   warnings: string[];
   errors: string[];
@@ -120,6 +133,7 @@ export const records: Records = {
   commands: new Map(),
   panels: [],
   watchers: [],
+  treeViews: [],
   activeEditorHandlers: [],
   warnings: [],
   errors: [],
@@ -129,6 +143,7 @@ export const records: Records = {
 /** Convenience accessors for the most-recently created objects. */
 export const lastPanel = (): MockPanel => records.panels[records.panels.length - 1];
 export const lastWatcher = (): MockWatcher => records.watchers[records.watchers.length - 1];
+export const lastTreeView = (): MockTreeView => records.treeViews[records.treeViews.length - 1];
 export const lastActiveEditorHandler = (): ((editor: unknown) => void) =>
   records.activeEditorHandlers[records.activeEditorHandlers.length - 1];
 
@@ -137,6 +152,7 @@ export function resetMock(): void {
   records.commands.clear();
   records.panels.length = 0;
   records.watchers.length = 0;
+  records.treeViews.length = 0;
   records.activeEditorHandlers.length = 0;
   records.warnings.length = 0;
   records.errors.length = 0;
@@ -162,6 +178,7 @@ export function makeMemento(initial: Record<string, unknown> = {}) {
 export const window: {
   activeTextEditor: { document: { uri: MockUri } } | undefined;
   createWebviewPanel: (id: string, title: string, col: number, opts: unknown) => MockPanel;
+  createTreeView: (id: string, opts: { treeDataProvider: MockTreeDataProvider }) => MockTreeView;
   onDidChangeActiveTextEditor: (cb: (editor: unknown) => void) => MockDisposable;
   showWarningMessage: (msg: string) => Promise<undefined>;
   showErrorMessage: (msg: string) => Promise<undefined>;
@@ -172,6 +189,11 @@ export const window: {
     const panel = new MockPanel();
     records.panels.push(panel);
     return panel;
+  }),
+  createTreeView: vi.fn((id: string, opts: { treeDataProvider: MockTreeDataProvider }) => {
+    const view: MockTreeView = { id, provider: opts.treeDataProvider, dispose: vi.fn() };
+    records.treeViews.push(view);
+    return view;
   }),
   onDidChangeActiveTextEditor(cb: (editor: unknown) => void): MockDisposable {
     records.activeEditorHandlers.push(cb);
@@ -219,8 +241,62 @@ export const Uri = {
 
 export const ViewColumn = { Active: -1, One: 1 } as const;
 
+export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
+
+/** A real class, not a spy: the provider tests assert on the items it hands back. */
+export class TreeItem {
+  id?: string;
+  description?: string;
+  tooltip?: unknown;
+  iconPath?: unknown;
+  contextValue?: string;
+  resourceUri?: MockUri;
+  command?: { command: string; title: string; arguments?: unknown[] };
+
+  constructor(
+    public readonly label: string,
+    public readonly collapsibleState: number = TreeItemCollapsibleState.None,
+  ) {}
+}
+
+export class ThemeIcon {
+  constructor(public readonly id: string) {}
+}
+
+export class MarkdownString {
+  constructor(public readonly value: string) {}
+}
+
 export class Disposable {
   dispose(): void {
     /* noop */
+  }
+}
+
+/**
+ * A working stand-in for `vscode.EventEmitter` — the store publishes graph/mode/status changes
+ * through these, so the tests need real fan-out, not a spy. `event` is a bound property because
+ * consumers pass it around detached (`store.onDidChangeGraph`).
+ */
+export class EventEmitter<T> {
+  private readonly handlers = new Set<(e: T) => void>();
+
+  readonly event = (
+    cb: (e: T) => void,
+    _thisArg?: unknown,
+    disposables?: MockDisposable[],
+  ): MockDisposable => {
+    this.handlers.add(cb);
+    const d = { dispose: vi.fn(() => this.handlers.delete(cb)) };
+    disposables?.push(d);
+    return d;
+  };
+
+  fire(e: T): void {
+    for (const h of [...this.handlers]) h(e);
+  }
+
+  dispose(): void {
+    this.handlers.clear();
   }
 }

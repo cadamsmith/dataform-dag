@@ -6,6 +6,7 @@ import {
   commands,
   lastActiveEditorHandler,
   lastPanel,
+  lastTreeView,
   lastWatcher,
   makeMemento,
   records,
@@ -95,18 +96,21 @@ beforeEach(() => {
 });
 
 describe("activate", () => {
-  it("registers the showGraph command and pushes disposables", () => {
-    const context = activateAndShow();
-    expect(commands.registerCommand).toHaveBeenCalledWith(
-      "dataformDag.showGraph",
-      expect.any(Function),
-    );
-    expect(commands.registerCommand).toHaveBeenCalledWith(
+  it("registers every contributed command", () => {
+    activateAndShow();
+    expect([...records.commands.keys()].sort()).toEqual([
+      "dataformDag.refresh",
+      "dataformDag.revealNode",
       "dataformDag.showCompiledSql",
-      expect.any(Function),
-    );
-    // two command disposables + the controller itself
-    expect(context.subscriptions).toHaveLength(3);
+      "dataformDag.showGraph",
+    ]);
+  });
+
+  it("registers the activity-bar tree view and disposes everything it owns", () => {
+    const context = activateAndShow();
+    expect(lastTreeView().id).toBe("dataformDag.nodes");
+    // 4 commands + the tree view + the tree provider + the controller + the store
+    expect(context.subscriptions).toHaveLength(8);
   });
 });
 
@@ -239,12 +243,28 @@ describe("focusActive", () => {
 describe("dispose", () => {
   it("tears down the panel so a later show() opens a fresh one", () => {
     activateAndShow();
-    const watcher = lastWatcher();
     lastPanel().emitDispose();
-    expect(watcher.dispose).toHaveBeenCalledTimes(1);
 
     records.commands.get("dataformDag.showGraph")!();
     expect(window.createWebviewPanel).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps watching .sqlx after the panel closes — the watcher belongs to the store", async () => {
+    activateAndShow();
+    const watcher = lastWatcher();
+    lastPanel().emitDispose();
+    expect(watcher.dispose).not.toHaveBeenCalled();
+
+    // The tree view still wants updates, so a change after the panel closed must still rebuild.
+    watcher.emitChange();
+    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("disposes the watcher when the extension's subscriptions are torn down", () => {
+    const context = activateAndShow();
+    const watcher = lastWatcher();
+    for (const d of context.subscriptions) d.dispose();
+    expect(watcher.dispose).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -455,6 +475,65 @@ describe("showCompiledSql command", () => {
     records.commands.get("dataformDag.showCompiledSql")!();
     expect(postedOfType("focusNode").at(-1)).toEqual({ type: "focusNode", nodeId: "a" });
     await vi.waitFor(() => expect(postedOfType("compiledSqlResult")).toHaveLength(1));
+  });
+});
+
+describe("tree view commands", () => {
+  /** The argument shape a tree row passes when its command fires. */
+  const entry = {
+    kind: "node",
+    node: { id: "a", filePath: "/proj/a.sqlx", type: "table", tags: [], refs: [] },
+  };
+
+  it("opens a node's file and focuses it on the canvas", async () => {
+    activateAndShow();
+    lastPanel().webview.emitMessage({ type: "ready" });
+    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
+
+    records.commands.get("dataformDag.revealNode")!(entry);
+
+    expect(records.shownDocs.at(-1)!.uri.fsPath).toBe("/proj/a.sqlx");
+    expect(postedOfType("focusNode").at(-1)).toEqual({ type: "focusNode", nodeId: "a" });
+  });
+
+  it("opens the file without forcing the panel open when only the tree is in use", () => {
+    const context = fakeContext();
+    activate(context as never);
+
+    records.commands.get("dataformDag.revealNode")!(entry);
+
+    expect(records.shownDocs.at(-1)!.uri.fsPath).toBe("/proj/a.sqlx");
+    expect(window.createWebviewPanel).not.toHaveBeenCalled();
+  });
+
+  it("ignores a reveal invoked with no node (e.g. from the palette)", () => {
+    const context = fakeContext();
+    activate(context as never);
+    records.commands.get("dataformDag.revealNode")!(undefined);
+    expect(window.showTextDocument).not.toHaveBeenCalled();
+  });
+
+  it("serves compiled SQL for the clicked row rather than the active editor", async () => {
+    compileMock.mockResolvedValue({ tables: [] });
+    findActionMock.mockReturnValue({ target: { name: "a" } });
+    sectionsMock.mockReturnValue([{ label: "query", sql: "SELECT 1" }]);
+    const context = fakeContext();
+    activate(context as never);
+    // A different file is open — the row's node must win.
+    window.activeTextEditor = { document: { uri: Uri.file("/proj/other.sqlx") } };
+
+    records.commands.get("dataformDag.showCompiledSql")!(entry);
+
+    await vi.waitFor(() => expect(postedOfType("compiledSqlResult")).toHaveLength(1));
+    expect(findActionMock.mock.calls[0][1]).toBe("a.sqlx");
+    expect(postedOfType("compiledSqlResult")[0]).toMatchObject({ nodeId: "a" });
+  });
+
+  it("rebuilds the graph on the refresh command", async () => {
+    const context = fakeContext();
+    activate(context as never);
+    records.commands.get("dataformDag.refresh")!();
+    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
   });
 });
 

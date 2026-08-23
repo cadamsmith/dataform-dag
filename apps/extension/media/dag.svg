@@ -1,0 +1,13 @@
+<!-- Activity-bar glyph: one upstream node fanning out to two downstream nodes. Monochrome and
+     currentColor so VS Code can tint it for the active/inactive states of both themes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <g stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round">
+    <path d="M7.6 10.7 15.1 6.4" />
+    <path d="M7.6 13.3 15.1 17.6" />
+  </g>
+  <g fill="currentColor">
+    <circle cx="4.75" cy="12" r="2.75" />
+    <circle cx="18.25" cy="5.25" r="2.75" />
+    <circle cx="18.25" cy="18.75" r="2.75" />
+  </g>
+</svg>
