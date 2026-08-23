@@ -1,95 +1,27 @@
 # ROADMAP
 
-Working notes for whoever (human or Claude) picks this up next. Read `README.md` for what the tool
-*is*; this file is **current state + what to do next + what not to break**.
+What's still open. Hard constraints live in `CLAUDE.md`; what the tool *is* lives in `README.md`.
+Anything not listed here is either done (`git log`) or deliberately out of scope.
 
-## Where things stand (2026-07-19)
+## Open
 
-**MVP is done and green.** One shared core + one shared UI behind two hosts, all wired:
+- **Cut the first release.** The extension packages cleanly (`npm run package` → a ~747 KB
+  `.vsix`), and `.github/workflows/publish.yml` pushes to both the VS Marketplace and Open VSX on a
+  tagged GitHub Release — but there are no tags yet and the one-time setup in
+  `.github/workflows/PUBLISHING.md` (two repo secrets, a registered publisher on each registry)
+  hasn't been done. That setup is credentialed and has to be the user's step.
+- **Human smoke test.** Everything a machine can check is green (127 tests, typecheck, both hosts
+  build). Nobody has confirmed with their eyes that (a) the packaged `.vsix` installs into a real
+  VS Code and renders, or (b) the web host renders in Chrome/Edge after picking a folder. Until
+  then "renders correctly" is inferred from build success, not observed.
+- **Web host: let the user re-pick the project folder.** `apps/web/src/main.tsx` gates once on a
+  directory pick and never offers a way back — switching projects means reloading the page.
+- **UI: collapse-by-layer.** Search, tag filtering, and the SQL preview shipped; collapsing a whole
+  layer/tag group did not.
 
-- `packages/core` — `.sqlx` regex parser, graph builder, two `GraphSource`s (regex `ParsedGraphSource`
-  default; `CompiledGraphSource` shells `dataform compile --json`, Node-only). 21 tests.
-- `packages/ui` — host-agnostic React Flow + ELK canvas, `HostBridge` seam, node detail, focus
-  highlighting. Runs standalone via `npm run dev:ui` against a mock graph. 13 tests.
-- `apps/extension` — VS Code webview host. esbuild bundles the Node extension + a single webview IIFE.
-  `GraphController` implements the host side (build / openFile / liveWatch / focus). 17 tests
-  (`GraphController` covered via an aliased `vscode` stub — see `test/mocks/vscode.ts`).
-- `apps/web` — browser host over the File System Access API (Chromium only). 3 tests.
+## Decided, not open
 
-`npm install && npm run build:core && npm test` → **54 tests pass, typecheck clean, both hosts build.**
-
-### Verified vs. NOT verified
-
-Everything checkable without a human is green (typecheck, tests, bundling, `vite dev` boots). What a
-machine **can't** self-check and a human still should:
-
-1. **Extension render** — open `apps/extension` in VS Code → F5 → run *Dataform DAG: Show Graph* →
-   confirm the graph renders, node-click opens the `.sqlx`, editing a `.sqlx` live-updates it.
-2. **Web render** — `npm run dev -w @dataform-dag/web` → open in Chrome/Edge → pick a Dataform folder
-   → confirm the graph renders.
-
-Until someone does these two, "renders correctly" is asserted from build success, not observed.
-
-## Next up (roughly in priority order)
-
-1. **Add CI.** No GitHub Actions yet. Wire a workflow: `npm ci` → `npm run build:core` →
-   `npm run typecheck` → `npm test` on push/PR. Fastest high-value win.
-2. **Push the import commit.** The initial code-import commit is **local-only** — not yet pushed to
-   `origin` (github.com/cadamsmith/dataform-dag). Confirm with the user before pushing.
-3. **~~Test `apps/extension/src/extension.ts`.~~ DONE (2026-07-19).** `GraphController` (buildAndPost /
-   focusActive / message routing / watcher wiring) is now covered by 14 tests in
-   `test/GraphController.test.ts`. The `vscode` module is aliased to a hand-rolled stub
-   (`test/mocks/vscode.ts`) via `vitest.config.ts` — it can't be `vi.mock`'d directly because it isn't
-   an installed package (only `@types/vscode`); Vitest resolves the specifier before the factory runs.
-   Core is mocked so the tests exercise orchestration, not core.
-4. **~~Package the extension as a `.vsix`.~~ DONE (2026-07-19).** `npm run package` in `apps/extension`
-   runs `vsce package --no-dependencies` and produces `dataform-dag-0.1.0.vsix` (~747 KB). Manifest
-   polished: `name` unscoped to `dataform-dag` (vsce rejects the `@scope/name` form → extension id is
-   now `cadamsmith.dataform-dag`), real `publisher: cadamsmith`, `icon.png` (a rendered DAG glyph),
-   `repository`/`bugs`/`homepage`/`keywords`/`galleryBanner`/`license`, version `0.1.0`. `LICENSE` is
-   copied into the package dir (vsce looks there, not the monorepo root). `.vscodeignore` ships only
-   `dist/` + manifest + README + LICENSE + icon — no `src/`, `test/`, `node_modules/`, or `.map`s
-   (verified by `unzip -l`). `--no-dependencies` is correct because everything is esbuild-bundled, so
-   the vsix needs zero `node_modules` (sidesteps the `*`-workspace-dep trap). `vscode:prepublish`
-   rebuilds core (`--prefix ../../packages/core`) then the extension. **NOT verified by machine:**
-   installing the `.vsix` into a real VS Code (`code --install-extension …`) and confirming it renders
-   — same human smoke test the MVP section flags. **Publishing is intentionally NOT done** (needs a
-   registered Marketplace publisher + a PAT — the user's credentialed step).
-5. **Web host is local-only — NOT deployed anywhere, and there are no plans to.** It's a static bundle
-   (`npm run build -w @dataform-dag/web`) run locally via `npm run dev -w @dataform-dag/web`; it exists
-   for local use and as the standalone proving ground for the shared UI. Don't wire up GitHub Pages /
-   Vercel / Netlify or any other hosting. Still worth doing locally: add a way to re-pick / switch
-   project folders (today you pick once on landing).
-6. **Expose `CompiledGraphSource` from a host.** Both hosts use the regex parser only. Add an opt-in
-   "high-fidelity" mode in the extension (it has a Node process + can run the CLI) so inline
-   `config.assertions` and JS-block refs show up. The seam already supports it; it's host wiring + UI.
-7. **UI features** now that nodes carry `tags`: tag/layer filtering, search, collapse-by-layer. Node
-   detail could show tags and the SQL preview.
-
-## Invariants — do NOT regress these (each was a real fix)
-
-- **Extension webview is ONE non-split IIFE bundle** (`apps/extension/build.mjs`, `splitting` off).
-  The shared UI lazy-`import()`s elkjs; a separate chunk would NOT carry the webview's CSP nonce and
-  would be blocked → elk never runs → graph silently falls back to dagre/bezier. Keep it inlined.
-  (Verified elkjs has no `eval`/`new Function`, so the nonce-only `script-src` runs it fine — don't
-  add `'unsafe-eval'` unless a future elk version needs it.)
-- **`@dataform-dag/core/browser`** is the browser-safe entry (parser + graph only). The main barrel
-  (`.`) re-exports `NodeFileSource` (`node:fs`) and `CompiledGraphSource` (`node:child_process`), which
-  break a browser bundle. The web host imports from `/browser`. Don't route browser code through `.`.
-- **`packages/ui` imports `@dataform-dag/core` for TYPES ONLY** (`import type`). This is what keeps
-  core's Node-only modules out of both UI bundles. Don't add a value import from core to the UI.
-- **Node identity = target name** (`config.name ?? basename`), not filename. Both graph sources key on
-  it so their outputs are interchangeable. (A file can rename itself, e.g. a declaration.)
-- **RF nodes are locked** (`nodesDraggable={false}`); the ELK layout is authoritative. Dragging +
-  interactive relayout was built then deliberately removed (positions aren't persisted; relayout
-  produced surprising crossings). Don't re-add it. Controlled RF nodes still MUST use
-  `useNodesState`/`useEdgesState` + change handlers or they render frozen (React Flow #002).
-- **Regex tier emits one node per file** (≈16 on the fixture); `dataform compile` emits more (≈24) —
-  the extra are inline `config.assertions` Dataform synthesizes. This is the documented tier boundary,
-  pinned by a golden `compile --json` fixture in core tests, NOT a bug to "fix" in the regex parser.
-
-## Loose thread to check
-
-- `packages/ui/src/index.ts` still exports `layoutGraph` (the dagre layout). It's the runtime fallback
-  inside `useLayout` (keep that), but verify whether the *barrel export* is consumed anywhere; if not,
-  it can drop from the public surface. Low priority.
+- `packages/ui/src/index.ts` exports `layoutGraph` (the dagre layout). Nothing outside the package
+  imports it — it's live only as the runtime fallback inside `useLayout`, and the tests reach it
+  through `../src/graphToFlow.js` directly. It can drop from the public barrel whenever someone is
+  touching that file; not worth a commit of its own.
