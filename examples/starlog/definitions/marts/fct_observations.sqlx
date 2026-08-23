@@ -3,7 +3,17 @@ config {
   schema: "marts",
   tags: ["marts", "core"],
   description: "Observation fact table, appended incrementally by observation timestamp.",
-  uniqueKey: ["observation_id"]
+  uniqueKey: ["observation_id"],
+  /*
+   * Dataform generates ONE action per uniqueKeys entry, plus a single rowConditions action that
+   * absorbs nonNull. Three generated assertions all hang off this one model, so the canvas collapses
+   * them into a "3 assertions" node — the largest group in this project.
+   */
+  assertions: {
+    uniqueKeys: [["observation_id"], ["session_id", "object_id", "observed_at"]],
+    nonNull: ["observation_id", "session_id", "object_id"],
+    rowConditions: ["magnitude_estimate IS NULL OR magnitude_estimate BETWEEN -5 AND 20"]
+  }
 }
 
 /*

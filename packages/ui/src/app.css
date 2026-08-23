@@ -413,3 +413,96 @@ body,
   font-size: 11.5px;
   line-height: 1.5;
 }
+
+/* --- Collapsed assertion clusters ----------------------------------------------------------- */
+
+/* A cluster reads as a stack: the same card with two offset sheets peeking out behind it, so "3
+   assertions" looks like several nodes rather than one oddly-named one. */
+.ddag-node.is-cluster::before,
+.ddag-node.is-cluster::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid #d5dbe3;
+  border-left: 4px solid var(--accent);
+  border-radius: 7px;
+  background: #ffffff;
+  z-index: -1;
+}
+.ddag-node.is-cluster::before {
+  transform: translate(4px, 4px);
+  opacity: 0.55;
+}
+.ddag-node.is-cluster::after {
+  transform: translate(8px, 8px);
+  opacity: 0.3;
+}
+.ddag-node.is-cluster {
+  position: relative;
+}
+
+/* The topbar's grouping switch: quiet when off, filled when on, like the mode toggle. */
+.ddag-btn--toggle {
+  margin-top: 0;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #fff;
+  color: #4b5563;
+  border: 1px solid #d5dbe3;
+}
+.ddag-btn--toggle:hover {
+  background: #f3f4f6;
+}
+.ddag-btn--toggle.is-on {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+/* The member list inside a cluster's detail panel. */
+.ddag-members__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ddag-members__item {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfbfd;
+}
+.ddag-members__item.is-highlighted {
+  border-color: var(--ddag-accent, #dc2626);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+.ddag-members__name {
+  display: block;
+  font: 600 12px/1.3 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  color: #111827;
+  word-break: break-all;
+}
+.ddag-members__tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.ddag-members__desc {
+  font-size: 12px;
+  color: #4b5563;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+.ddag-members__actions {
+  display: flex;
+  gap: 6px;
+}
+.ddag-members__actions .ddag-btn {
+  margin-top: 8px;
+  padding: 4px 9px;
+  font-size: 12px;
+}

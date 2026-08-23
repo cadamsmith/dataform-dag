@@ -7,8 +7,8 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
-        // The folder the Extension Development Host opens: the in-repo example project, which is
-        // built to exercise every feature. Swap this path to test against a project of your own.
+        // The folder the Extension Development Host opens: the in-repo example, which now compiles
+        // to three assertion clusters. Swap this path to test against a project of your own.
         "${workspaceFolder}/examples/starlog"
       ],
       "outFiles": ["${workspaceFolder}/apps/extension/dist/**/*.js"]

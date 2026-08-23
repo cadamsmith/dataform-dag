@@ -11,6 +11,9 @@ VS Code extension and a standalone local web app.
 
 - **The whole graph at a glance** — every source, table, view, incremental, assertion, and operation,
   laid out left-to-right by dependency with a color-coded legend and a minimap.
+- **Assertion grouping** — assertions sharing the same dependencies collapse into one "N
+  assertions" node, with a panel listing each one; a large compiled graph is mostly assertion leaves
+  without it. Toggleable from the toolbar.
 - **Search and tag filtering** — jump to a node by name, or narrow the canvas to one or more
   Dataform `tags`.
 - **Node detail** — type, tags, file path, and upstream/downstream refs, plus the compiled SQL for
@@ -60,7 +63,7 @@ Then pick a host:
 npm run dev -w @dataform-dag/web   # browser host → open the URL, pick a Dataform folder
                                    # (Chromium only — needs the File System Access API)
 
-npm run dev:ui                     # the shared UI alone, against a mock 16-node graph
+npm run dev:ui                     # the shared UI alone, against a mock 18-node graph
 ```
 
 ## Parsing strategy: layered graph sources

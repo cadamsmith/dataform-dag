@@ -64,7 +64,7 @@ export function NodeDetailPanel({
   );
 }
 
-function CompiledSql({ sections }: { sections: CompiledSqlSection[] }): JSX.Element {
+export function CompiledSql({ sections }: { sections: CompiledSqlSection[] }): JSX.Element {
   if (sections.length === 0) {
     return <p className="ddag-neighbors__empty">This action compiles to no SQL.</p>;
   }
@@ -82,7 +82,7 @@ function CompiledSql({ sections }: { sections: CompiledSqlSection[] }): JSX.Elem
   );
 }
 
-function NeighborList({
+export function NeighborList({
   title,
   ids,
   onSelect,

@@ -10,7 +10,7 @@ Anything not listed here is either done (`git log`) or deliberately out of scope
   tagged GitHub Release — but there are no tags yet and the one-time setup in
   `.github/workflows/PUBLISHING.md` (two repo secrets, a registered publisher on each registry)
   hasn't been done. That setup is credentialed and has to be the user's step.
-- **Human smoke test.** Everything a machine can check is green (146 tests, typecheck, both hosts
+- **Human smoke test.** Everything a machine can check is green (169 tests, typecheck, both hosts
   build, `.vsix` packages). Nobody has confirmed with their eyes that (a) the packaged `.vsix`
   installs into a real VS Code and renders, (b) the activity-bar icon shows up and its tree opens
   files and reflects rebuilds, or (c) the web host renders in Chrome/Edge after picking a folder.
@@ -20,8 +20,16 @@ Anything not listed here is either done (`git log`) or deliberately out of scope
   `TreeItem.id`s, since the provider rebuilds its entries on every `getChildren`.
 - **Web host: let the user re-pick the project folder.** `apps/web/src/main.tsx` gates once on a
   directory pick and never offers a way back — switching projects means reloading the page.
-- **UI: collapse-by-layer.** Search, tag filtering, and the SQL preview shipped; collapsing a whole
-  layer/tag group did not.
+- **UI: collapse-by-layer.** Search, tag filtering, the SQL preview, and assertion grouping shipped;
+  collapsing a whole layer/tag group did not.
+- **Expand a cluster in place on the canvas.** Grouped assertions are listed in the detail panel,
+  deliberately not expanded on the canvas: that needs an `expanded` set, a full ELK relayout per
+  toggle (slow on a large project), and the canvas would shift under the click since nodes are
+  locked. `collapseAssertions` takes a `minGroupSize` and returns its `members`/`clusterOf` maps, so
+  the transform is ready for it whenever the relayout cost is worth paying.
+- **The rest of the large-project story.** Assertion grouping was the first cut at a graph that is
+  too big to read. Not yet measured or addressed: ELK layout time and React Flow's DOM node count on
+  a project with hundreds of actions.
 
 ## Decided, not open
 

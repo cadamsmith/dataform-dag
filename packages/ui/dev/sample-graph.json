@@ -12,7 +12,7 @@
         "int_fare_offers",
         "stg_fare_snapshots"
       ],
-      "description": "INTEGRITY: the trip axes DERIVED downstream from dates (constraint #3 — never trust the request) must agree with the request metadata ingestion recorded. days_to_departure (= outbound − snapshot) must equal advance_days, and stay_length_days (= return − outbound) must equal return_gap_days. A mismatch means an ingestion date-boundary/timezone bug (the run's snapshot_date disagreeing with the advance_days it computed at request time) — exactly the class of silent corruption the derive-downstream discipline exists to surface. Joins the offer grain back to the deduped snapshot on the trip key."
+      "description": "INTEGRITY: the trip axes DERIVED downstream from dates (constraint #3 \u2014 never trust the request) must agree with the request metadata ingestion recorded. days_to_departure (= outbound \u2212 snapshot) must equal advance_days, and stay_length_days (= return \u2212 outbound) must equal return_gap_days. A mismatch means an ingestion date-boundary/timezone bug (the run's snapshot_date disagreeing with the advance_days it computed at request time) \u2014 exactly the class of silent corruption the derive-downstream discipline exists to surface. Joins the offer grain back to the deduped snapshot on the trip key."
     },
     {
       "id": "assert_fare_price_bounds",
@@ -25,7 +25,7 @@
       "refs": [
         "int_fare_offers"
       ],
-      "description": "REASONABLENESS bounds on the priced offer — catches parse/unnest corruption before it poisons the baselines (a single $0 or $1e6 fare would wreck a cell mean and z-score). Deliberately WIDE, not a business rule: observed economy round-trips run ~$900–$3200 (premium connecting routings), so bounds of $50–$20000 flag only garbage (negative, zero, NULL, or absurd), never a legitimately expensive itinerary. Fires per offending offer so the bad row is identifiable."
+      "description": "REASONABLENESS bounds on the priced offer \u2014 catches parse/unnest corruption before it poisons the baselines (a single $0 or $1e6 fare would wreck a cell mean and z-score). Deliberately WIDE, not a business rule: observed economy round-trips run ~$900\u2013$3200 (premium connecting routings), so bounds of $50\u2013$20000 flag only garbage (negative, zero, NULL, or absurd), never a legitimately expensive itinerary. Fires per offending offer so the bad row is identifiable."
     },
     {
       "id": "assert_snapshot_freshness",
@@ -38,7 +38,7 @@
       "refs": [
         "stg_fare_snapshots"
       ],
-      "description": "FRESHNESS backstop — the continuous-accumulation guarantee (constraint #4). Fails when no VALID fetch has landed recently, i.e. the ingestion pipeline has silently stopped writing. Uses is_valid_fetch (not just any row) so it distinguishes 'run never fired' from 'run fired but every fetch failed' — a partition full of error rows is still stale for modeling. Complements the per-call error isolation + Scheduler retries: those keep one run resilient; this detects a run that stopped happening at all."
+      "description": "FRESHNESS backstop \u2014 the continuous-accumulation guarantee (constraint #4). Fails when no VALID fetch has landed recently, i.e. the ingestion pipeline has silently stopped writing. Uses is_valid_fetch (not just any row) so it distinguishes 'run never fired' from 'run fired but every fetch failed' \u2014 a partition full of error rows is still stale for modeling. Complements the per-call error isolation + Scheduler retries: those keep one run resilient; this detects a run that stopped happening at all."
     },
     {
       "id": "booking_curve_baseline",
@@ -52,7 +52,7 @@
         "int_daily_fare_stats",
         "int_trip_fares"
       ],
-      "description": "The booking curve: expected CHEAPEST fare vs lead time (grain: one row per lead_time_bucket) for the DEFAULT-STAY product. Marginal over departure_month — sums the additive sufficient stats of int_daily_fare_stats by lead bucket (no history rescan). MATURITY: is_reliable gates on DISTINCT ANCHORS (independent trips), not n_observations (the panel re-observes each anchor, inflating observation count). stddev_fare is NULL when n_observations < 2. This marginal is for reporting/EDA and as a sparse-cell fallback; it is NOT the residual model's primary predictor — the panel makes lead & month collinear, so the honest expected surface is the joint (lead × month) cell in the residual model. Per-segment (hub/carrier/stay) baselines are DEFERRED, not dropped."
+      "description": "The booking curve: expected CHEAPEST fare vs lead time (grain: one row per lead_time_bucket) for the DEFAULT-STAY product. Marginal over departure_month \u2014 sums the additive sufficient stats of int_daily_fare_stats by lead bucket (no history rescan). MATURITY: is_reliable gates on DISTINCT ANCHORS (independent trips), not n_observations (the panel re-observes each anchor, inflating observation count). stddev_fare is NULL when n_observations < 2. This marginal is for reporting/EDA and as a sparse-cell fallback; it is NOT the residual model's primary predictor \u2014 the panel makes lead & month collinear, so the honest expected surface is the joint (lead \u00d7 month) cell in the residual model. Per-segment (hub/carrier/stay) baselines are DEFERRED, not dropped."
     },
     {
       "id": "fare_surface_baseline",
@@ -66,7 +66,7 @@
         "int_daily_fare_stats",
         "int_trip_fares"
       ],
-      "description": "The JOINT expectation surface: expected CHEAPEST fare per (lead_time_bucket × departure_month) cell (grain: one row per joint cell) for the DEFAULT-STAY product. This is the honest expected surface the residual model scores against — booking_curve_baseline and seasonal_baseline are its two marginals (summed over month / over lead), useful for EDA but BIASED as a predictor because the panel makes lead & month collinear (a mid-July snapshot forces Aug=short-lead, spring=long-lead). Exposing the joint cell lets Looker render the booking-curve HEATMAP (lead × month → mean fare) directly instead of reconstructing it from marginals. Sums the additive sufficient stats of int_daily_fare_stats by (lead_bucket_min, departure_month) — no history rescan; the LOO per-observation variant lives in fct_fare_anomaly. MATURITY: is_reliable gates on DISTINCT ANCHORS (independent trips), not n_observations (the panel re-observes each anchor). Today the surface is DIAGONAL and sparse — that collinearity is exactly why the joint model exists, so the sparse diagonal is the visual argument, not a defect. stddev_fare NULL when n_observations < 2."
+      "description": "The JOINT expectation surface: expected CHEAPEST fare per (lead_time_bucket \u00d7 departure_month) cell (grain: one row per joint cell) for the DEFAULT-STAY product. This is the honest expected surface the residual model scores against \u2014 booking_curve_baseline and seasonal_baseline are its two marginals (summed over month / over lead), useful for EDA but BIASED as a predictor because the panel makes lead & month collinear (a mid-July snapshot forces Aug=short-lead, spring=long-lead). Exposing the joint cell lets Looker render the booking-curve HEATMAP (lead \u00d7 month \u2192 mean fare) directly instead of reconstructing it from marginals. Sums the additive sufficient stats of int_daily_fare_stats by (lead_bucket_min, departure_month) \u2014 no history rescan; the LOO per-observation variant lives in fct_fare_anomaly. MATURITY: is_reliable gates on DISTINCT ANCHORS (independent trips), not n_observations (the panel re-observes each anchor). Today the surface is DIAGONAL and sparse \u2014 that collinearity is exactly why the joint model exists, so the sparse diagonal is the visual argument, not a defect. stddev_fare NULL when n_observations < 2."
     },
     {
       "id": "int_daily_fare_stats",
@@ -79,7 +79,7 @@
       "refs": [
         "int_trip_fares"
       ],
-      "description": "Additive sufficient statistics behind both marginal baselines (grain: snapshot_date × lead_time_bucket × departure_month), aggregated from int_trip_fares filtered to the DEFAULT STAY (product consistency — a 14/21-day trip must not enter a 7-day cell). Moments (n, sum, sum_sq, min/max, +log moments) are additive, so booking_curve_baseline sums over month and seasonal_baseline sums over lead-bucket, both exact. NOTE: n_observations counts trip-OBSERVATIONS, which the re-observing panel inflates beyond independent trips — the reliability gate downstream uses DISTINCT ANCHORS (computed separately from int_trip_fares), never this count. Incremental-correctness core: partitioned by snapshot_date + MERGE-replace on the cell key → boundary reprocessing is idempotent. Incremental by snapshot_date."
+      "description": "Additive sufficient statistics behind both marginal baselines (grain: snapshot_date \u00d7 lead_time_bucket \u00d7 departure_month), aggregated from int_trip_fares filtered to the DEFAULT STAY (product consistency \u2014 a 14/21-day trip must not enter a 7-day cell). Moments (n, sum, sum_sq, min/max, +log moments) are additive, so booking_curve_baseline sums over month and seasonal_baseline sums over lead-bucket, both exact. NOTE: n_observations counts trip-OBSERVATIONS, which the re-observing panel inflates beyond independent trips \u2014 the reliability gate downstream uses DISTINCT ANCHORS (computed separately from int_trip_fares), never this count. Incremental-correctness core: partitioned by snapshot_date + MERGE-replace on the cell key \u2192 boundary reprocessing is idempotent. Incremental by snapshot_date."
     },
     {
       "id": "int_event_context",
@@ -93,7 +93,7 @@
         "int_trip_fares",
         "dim_events"
       ],
-      "description": "The event-enrichment bridge: maps each panel ANCHOR (outbound_date = when you travel) to its Moroccan-event context, so downstream layers can test whether fares/residuals move with proximity to Ramadan/Eid. Grain: one row per distinct outbound_date observed in int_trip_fares.\n\nNON-INVASIVE BY DESIGN: a view over int_trip_fares × dim_events — the incremental spine (int_trip_fares / int_daily_fare_stats / fct_fare_anomaly) is untouched, so its verified idempotency is preserved. Nothing here feeds the z-score; this is the CORRELATION seam (docs/warehouse.md layer #5), not a new predictor.\n\nTWO EVENT SHAPES, kept distinct (never conflated): WINDOWS (Ramadan, summer school) → in_* boolean flags; POINT events (Eid, Mawlid, Hijra) → SIGNED days-to-event. Sign convention: days_to_* = event_date − outbound_date, so POSITIVE = you depart BEFORE the event (event upcoming), NEGATIVE = you depart after it. The Eid columns single out the marquee diaspora demand peaks; the nearest_point_event_* columns generalize to any lunar point marker."
+      "description": "The event-enrichment bridge: maps each panel ANCHOR (outbound_date = when you travel) to its Moroccan-event context, so downstream layers can test whether fares/residuals move with proximity to Ramadan/Eid. Grain: one row per distinct outbound_date observed in int_trip_fares.\n\nNON-INVASIVE BY DESIGN: a view over int_trip_fares \u00d7 dim_events \u2014 the incremental spine (int_trip_fares / int_daily_fare_stats / fct_fare_anomaly) is untouched, so its verified idempotency is preserved. Nothing here feeds the z-score; this is the CORRELATION seam (docs/warehouse.md layer #5), not a new predictor.\n\nTWO EVENT SHAPES, kept distinct (never conflated): WINDOWS (Ramadan, summer school) \u2192 in_* boolean flags; POINT events (Eid, Mawlid, Hijra) \u2192 SIGNED days-to-event. Sign convention: days_to_* = event_date \u2212 outbound_date, so POSITIVE = you depart BEFORE the event (event upcoming), NEGATIVE = you depart after it. The Eid columns single out the marquee diaspora demand peaks; the nearest_point_event_* columns generalize to any lunar point marker."
     },
     {
       "id": "int_fare_offers",
@@ -105,7 +105,7 @@
       "refs": [
         "stg_fare_offers"
       ],
-      "description": "One row per priced OFFER (grain: snapshot_date × outbound_date × return_date × offer_list × offer_index) — the analytical unit for booking-curve, dispersion, and residual-anomaly work. Rolls up the outbound legs from stg_fare_offers into offer-level microstructure (routing path, connecting hub, stop count, carriers, departure timing) and adds the derived trip axes (days_to_departure, stay_length) that constraint #3 forbids computing at ingestion. NOTE: an offer's legs describe the OUTBOUND journey only — Google Flights returns return options behind a departure_token we never call (constraint #1) — but offer_price is the full ROUND-TRIP total. Incremental by snapshot_date."
+      "description": "One row per priced OFFER (grain: snapshot_date \u00d7 outbound_date \u00d7 return_date \u00d7 offer_list \u00d7 offer_index) \u2014 the analytical unit for booking-curve, dispersion, and residual-anomaly work. Rolls up the outbound legs from stg_fare_offers into offer-level microstructure (routing path, connecting hub, stop count, carriers, departure timing) and adds the derived trip axes (days_to_departure, stay_length) that constraint #3 forbids computing at ingestion. NOTE: an offer's legs describe the OUTBOUND journey only \u2014 Google Flights returns return options behind a departure_token we never call (constraint #1) \u2014 but offer_price is the full ROUND-TRIP total. Incremental by snapshot_date."
     },
     {
       "id": "int_trip_fares",
@@ -118,7 +118,7 @@
       "refs": [
         "int_fare_offers"
       ],
-      "description": "The fare series: one row per trip-observation (grain: snapshot_date × outbound_date × return_date) with its CHEAPEST offer price and cell coordinates. The single definition of 'the fare for this trip at this observation' — int_daily_fare_stats aggregates it into sufficient statistics, and fct_fare_anomaly scores it, so the cheapest-per-trip + lead-bucket + month logic lives in exactly one place. Keeps ALL stay lengths (stay_length_days) so a future stay-length model can use the 14/21-day variants; the booking-curve/seasonal/anomaly layers filter to the default stay downstream. Carries outbound_date so cells can count DISTINCT ANCHORS (independent trips), which the re-observing panel makes different from a raw observation count. Incremental by snapshot_date."
+      "description": "The fare series: one row per trip-observation (grain: snapshot_date \u00d7 outbound_date \u00d7 return_date) with its CHEAPEST offer price and cell coordinates. The single definition of 'the fare for this trip at this observation' \u2014 int_daily_fare_stats aggregates it into sufficient statistics, and fct_fare_anomaly scores it, so the cheapest-per-trip + lead-bucket + month logic lives in exactly one place. Keeps ALL stay lengths (stay_length_days) so a future stay-length model can use the 14/21-day variants; the booking-curve/seasonal/anomaly layers filter to the default stay downstream. Carries outbound_date so cells can count DISTINCT ANCHORS (independent trips), which the re-observing panel makes different from a raw observation count. Incremental by snapshot_date."
     },
     {
       "id": "seasonal_baseline",
@@ -132,7 +132,7 @@
         "int_daily_fare_stats",
         "int_trip_fares"
       ],
-      "description": "The seasonal component: expected CHEAPEST fare by DEPARTURE MONTH (grain: one row per departure_month, 1-12) for the DEFAULT-STAY product. Marginal over lead time — sums the additive sufficient stats of int_daily_fare_stats by month. Captures FIXED-CALENDAR seasonality (Morocco summer peak, school holidays); deliberately NOT the lunar Ramadan/Eid effect (drifts ~11 days/yr, so a month-of-year baseline smears it) — an event-relative baseline is the next step, keeping the fixed-vs-lunar seam explicit. MATURITY: is_reliable gates on DISTINCT ANCHORS, not n_observations. This marginal is for reporting/EDA and as a sparse-cell fallback — NOT the residual model's primary predictor (lead & month are collinear in the panel, so the additive formula is biased; the honest surface is the joint (lead × month) cell)."
+      "description": "The seasonal component: expected CHEAPEST fare by DEPARTURE MONTH (grain: one row per departure_month, 1-12) for the DEFAULT-STAY product. Marginal over lead time \u2014 sums the additive sufficient stats of int_daily_fare_stats by month. Captures FIXED-CALENDAR seasonality (Morocco summer peak, school holidays); deliberately NOT the lunar Ramadan/Eid effect (drifts ~11 days/yr, so a month-of-year baseline smears it) \u2014 an event-relative baseline is the next step, keeping the fixed-vs-lunar seam explicit. MATURITY: is_reliable gates on DISTINCT ANCHORS, not n_observations. This marginal is for reporting/EDA and as a sparse-cell fallback \u2014 NOT the residual model's primary predictor (lead & month are collinear in the panel, so the additive formula is biased; the honest surface is the joint (lead \u00d7 month) cell)."
     },
     {
       "id": "fct_fare_anomaly",
@@ -146,7 +146,7 @@
         "int_trip_fares",
         "int_daily_fare_stats"
       ],
-      "description": "THE differentiator: the residual of each observed cheapest fare vs its fitted expectation, z-scored. Grain: one row per DEFAULT-STAY trip-observation (snapshot_date × outbound_date × return_date). Expected fare = the JOINT (lead_bucket × month) cell mean (conditions on lead AND season simultaneously, so it's free of the lead/month collinearity that biases an additive marginal surface), computed LEAVE-ONE-OUT from the cell's sufficient statistics so a point never scores against itself. z_score is raw-dollar (interpretable); z_score_log is the log-space robustness cross-check (fares are heavy-tailed).\n\nRecomputed in full each run (type: table, not incremental): every observation re-scores against the current baseline, so early scores are never left stale as cells fill — correctness over an as-of incremental variant (a future operational 'would we have flagged it live' extension). Small (one thin route), and materialized for cheap consumer reads (constraint #5).\n\nMATURITY: is_anomaly fires only when the cell is reliable by DISTINCT ANCHORS (independent trips) — not observation count, which the re-observing panel inflates. Today almost every cell is anchor-sparse, so this is honestly ~all 'insufficient_data'; it lights up as the panel accumulates. CAVEAT: within a cell, repeated re-observations of one anchor are autocorrelated, so loo_std under-states true dispersion (the anchor gate prevents unreliable cells from flagging but does not de-bias loo_std) — the fuller fix (one observation per anchor per cell) trades against the snapshot-partitioned idempotency and is deferred.\n\nCONSUMER NOTE: because every re-observation is scored, one anchor's anomaly episode spans many rows — dedup to anchor-episodes before counting 'how many anomalies', or correlated rows multi-count."
+      "description": "THE differentiator: the residual of each observed cheapest fare vs its fitted expectation, z-scored. Grain: one row per DEFAULT-STAY trip-observation (snapshot_date \u00d7 outbound_date \u00d7 return_date). Expected fare = the JOINT (lead_bucket \u00d7 month) cell mean (conditions on lead AND season simultaneously, so it's free of the lead/month collinearity that biases an additive marginal surface), computed LEAVE-ONE-OUT from the cell's sufficient statistics so a point never scores against itself. z_score is raw-dollar (interpretable); z_score_log is the log-space robustness cross-check (fares are heavy-tailed).\n\nRecomputed in full each run (type: table, not incremental): every observation re-scores against the current baseline, so early scores are never left stale as cells fill \u2014 correctness over an as-of incremental variant (a future operational 'would we have flagged it live' extension). Small (one thin route), and materialized for cheap consumer reads (constraint #5).\n\nMATURITY: is_anomaly fires only when the cell is reliable by DISTINCT ANCHORS (independent trips) \u2014 not observation count, which the re-observing panel inflates. Today almost every cell is anchor-sparse, so this is honestly ~all 'insufficient_data'; it lights up as the panel accumulates. CAVEAT: within a cell, repeated re-observations of one anchor are autocorrelated, so loo_std under-states true dispersion (the anchor gate prevents unreliable cells from flagging but does not de-bias loo_std) \u2014 the fuller fix (one observation per anchor per cell) trades against the snapshot-partitioned idempotency and is deferred.\n\nCONSUMER NOTE: because every re-observation is scored, one anchor's anomaly episode spans many rows \u2014 dedup to anchor-episodes before counting 'how many anomalies', or correlated rows multi-count."
     },
     {
       "id": "fct_fare_anomaly_events",
@@ -161,7 +161,7 @@
         "fct_fare_anomaly",
         "int_event_context"
       ],
-      "description": "THE event-correlation surface (docs/warehouse.md layer #5, the marquee lunar-drift wrinkle): fct_fare_anomaly enriched with each departure's Moroccan-event context, so a consumer can ask 'do the fare residuals spike near Ramadan/Eid?' — the whole reason the DAG is multi-source. A thin VIEW joining the centerpiece fact to int_event_context on outbound_date; adds no modeling, changes no z-score.\n\nWHY A CORRELATION VIEW, NOT AN EVENT PREDICTOR: the honest expected surface stays the joint (lead × month) cell mean (fct_fare_anomaly). Folding event proximity INTO the expectation would need many independent anchors spanning each lunar phase — which accumulate over a year (maturity discipline, docs/decisions.md). Until then this view lets the event effect be OBSERVED and charted against residuals without over-fitting a sparse predictor.\n\nMATURITY TODAY: fct_fare_anomaly is still ~all 'insufficient_data' (cells anchor-sparse), so is_anomaly is mostly FALSE and the event correlation is not yet statistically testable — but the plumbing is live and one anchor (2027-02-15) already sits inside Ramadan 2027, so the surface fills as the panel rolls forward. CONSUMER NOTE (inherited): every re-observation is a row and one anchor's episode spans many rows — dedup to anchor-episodes before counting anomalies-near-events."
+      "description": "THE event-correlation surface (docs/warehouse.md layer #5, the marquee lunar-drift wrinkle): fct_fare_anomaly enriched with each departure's Moroccan-event context, so a consumer can ask 'do the fare residuals spike near Ramadan/Eid?' \u2014 the whole reason the DAG is multi-source. A thin VIEW joining the centerpiece fact to int_event_context on outbound_date; adds no modeling, changes no z-score.\n\nWHY A CORRELATION VIEW, NOT AN EVENT PREDICTOR: the honest expected surface stays the joint (lead \u00d7 month) cell mean (fct_fare_anomaly). Folding event proximity INTO the expectation would need many independent anchors spanning each lunar phase \u2014 which accumulate over a year (maturity discipline, docs/decisions.md). Until then this view lets the event effect be OBSERVED and charted against residuals without over-fitting a sparse predictor.\n\nMATURITY TODAY: fct_fare_anomaly is still ~all 'insufficient_data' (cells anchor-sparse), so is_anomaly is mostly FALSE and the event correlation is not yet statistically testable \u2014 but the plumbing is live and one anchor (2027-02-15) already sits inside Ramadan 2027, so the surface fills as the panel rolls forward. CONSUMER NOTE (inherited): every re-observation is a row and one anchor's episode spans many rows \u2014 dedup to anchor-episodes before counting anomalies-near-events."
     },
     {
       "id": "dim_events",
@@ -172,7 +172,7 @@
         "events"
       ],
       "refs": [],
-      "description": "Curated Moroccan travel-demand event calendar — the multi-source seam that makes the seasonal/anomaly layers event-aware (docs/warehouse.md layer #5). Grain: one row per event OCCURRENCE (a specific year's Ramadan, Eid, etc.). Deliberately scoped to the demand drivers of a US→Morocco diaspora leisure route: the LUNAR religious events (Ramadan window + the Eid family-visit peaks + Mawlid/Hijra markers) that DRIFT ~11 days/yr against the Gregorian calendar — the marquee wrinkle a month-of-year seasonal baseline structurally cannot capture — plus the FIXED summer school-holiday window (the big leisure peak already visible in the fares). Single-day civic holidays (Throne Day, Green March, Independence Day) are intentionally excluded: low leisure-travel signal for this route, and they'd add breadth over depth.\n\nSHAPE: point events (Eid, Mawlid, Hijra New Year) get start_date = end_date and are consumed as SIGNED days-to-event; windows (Ramadan, summer school) get a real span and are consumed as in_window flags — never conflate a month-long fast with a one-day feast (int_event_context keeps them distinct).\n\nPROVENANCE: dates curated from timeanddate.com / publicholidays.africa / holidays-info.com (Morocco). LUNAR dates depend on moon sighting and may differ from the observed Moroccan date by ±1 day; the summer school-holiday window is APPROXIMATE (public-school break, ~early Jul–early Sep). Static data-as-code (user decision 2026-07-12) — deterministic, no API budget, reproducible; lunar dates are publishable years ahead. Refresh the far-out years as observed dates firm up."
+      "description": "Curated Moroccan travel-demand event calendar \u2014 the multi-source seam that makes the seasonal/anomaly layers event-aware (docs/warehouse.md layer #5). Grain: one row per event OCCURRENCE (a specific year's Ramadan, Eid, etc.). Deliberately scoped to the demand drivers of a US\u2192Morocco diaspora leisure route: the LUNAR religious events (Ramadan window + the Eid family-visit peaks + Mawlid/Hijra markers) that DRIFT ~11 days/yr against the Gregorian calendar \u2014 the marquee wrinkle a month-of-year seasonal baseline structurally cannot capture \u2014 plus the FIXED summer school-holiday window (the big leisure peak already visible in the fares). Single-day civic holidays (Throne Day, Green March, Independence Day) are intentionally excluded: low leisure-travel signal for this route, and they'd add breadth over depth.\n\nSHAPE: point events (Eid, Mawlid, Hijra New Year) get start_date = end_date and are consumed as SIGNED days-to-event; windows (Ramadan, summer school) get a real span and are consumed as in_window flags \u2014 never conflate a month-long fast with a one-day feast (int_event_context keeps them distinct).\n\nPROVENANCE: dates curated from timeanddate.com / publicholidays.africa / holidays-info.com (Morocco). LUNAR dates depend on moon sighting and may differ from the observed Moroccan date by \u00b11 day; the summer school-holiday window is APPROXIMATE (public-school break, ~early Jul\u2013early Sep). Static data-as-code (user decision 2026-07-12) \u2014 deterministic, no API budget, reproducible; lunar dates are publishable years ahead. Refresh the far-out years as observed dates firm up."
     },
     {
       "id": "fare_snapshots",
@@ -180,7 +180,7 @@
       "type": "source",
       "tags": [],
       "refs": [],
-      "description": "Raw, append-only SerpApi Google Flights responses for the ATL–CMN panel. One row per panel query per run; `raw_response` holds the full API body verbatim (STRING). Deliberately messy: duplicate/late snapshots and the deeply-nested offer arrays are preserved here — all parsing/dedup happens downstream in staging (constraint #3). Partitioned by `snapshot_date`, clustered by (origin, destination)."
+      "description": "Raw, append-only SerpApi Google Flights responses for the ATL\u2013CMN panel. One row per panel query per run; `raw_response` holds the full API body verbatim (STRING). Deliberately messy: duplicate/late snapshots and the deeply-nested offer arrays are preserved here \u2014 all parsing/dedup happens downstream in staging (constraint #3). Partitioned by `snapshot_date`, clustered by (origin, destination)."
     },
     {
       "id": "stg_fare_offers",
@@ -192,7 +192,7 @@
       "refs": [
         "stg_fare_snapshots"
       ],
-      "description": "Tidy offer×leg rows — the deeply-nested raw_response flattened (grain: snapshot × offer × leg). best_flights and other_flights are unioned with an offer_list label; each offer's flights array is unnested to legs. STRUCTURAL ONLY: unnest, cast, standardize codes/timestamps. Analytical derivations (days_to_departure, stop count, routing/hub, dispersion) belong in intermediate, per constraint #3. Reads only valid fetches from stg_fare_snapshots. Incremental by snapshot_date."
+      "description": "Tidy offer\u00d7leg rows \u2014 the deeply-nested raw_response flattened (grain: snapshot \u00d7 offer \u00d7 leg). best_flights and other_flights are unioned with an offer_list label; each offer's flights array is unnested to legs. STRUCTURAL ONLY: unnest, cast, standardize codes/timestamps. Analytical derivations (days_to_departure, stop count, routing/hub, dispersion) belong in intermediate, per constraint #3. Reads only valid fetches from stg_fare_snapshots. Incremental by snapshot_date."
     },
     {
       "id": "stg_fare_snapshots",
@@ -204,7 +204,33 @@
       "refs": [
         "fare_snapshots"
       ],
-      "description": "One row per DEDUPED, route-scoped fare snapshot (grain: snapshot_date × outbound_date × return_date). Dedup happens HERE, before any offer×leg fan-out, so duplicate/retried runs collapse first. Keeps every scoped row (incl. failed fetches) with an is_valid_fetch flag so the freshness assertion can tell 'run never fired' from 'run fired, fetch failed'. Parses raw_response once into a JSON column for downstream unnest; lifts the per-call price_insights (Google's own comparison signal). Incremental: scans only new snapshot_date partitions — dedup is fully within-partition because a run always writes its own ingestion-day partition."
+      "description": "One row per DEDUPED, route-scoped fare snapshot (grain: snapshot_date \u00d7 outbound_date \u00d7 return_date). Dedup happens HERE, before any offer\u00d7leg fan-out, so duplicate/retried runs collapse first. Keeps every scoped row (incl. failed fetches) with an is_valid_fetch flag so the freshness assertion can tell 'run never fired' from 'run fired, fetch failed'. Parses raw_response once into a JSON column for downstream unnest; lifts the per-call price_insights (Google's own comparison signal). Incremental: scans only new snapshot_date partitions \u2014 dedup is fully within-partition because a run always writes its own ingestion-day partition."
+    },
+    {
+      "id": "assert_fare_offers_not_null",
+      "filePath": "packages/core/test/fixtures/definitions/assertions/assert_fare_offers_not_null.sqlx",
+      "type": "assertion",
+      "tags": [
+        "assertion",
+        "data-quality"
+      ],
+      "refs": [
+        "int_fare_offers"
+      ],
+      "description": "NOT NULL on the offer grain's key columns. Shares a position with the other int_fare_offers assertions, so the canvas groups them."
+    },
+    {
+      "id": "assert_fare_offers_unique_key",
+      "filePath": "packages/core/test/fixtures/definitions/assertions/assert_fare_offers_unique_key.sqlx",
+      "type": "assertion",
+      "tags": [
+        "assertion",
+        "data-quality"
+      ],
+      "refs": [
+        "int_fare_offers"
+      ],
+      "description": "One row per (trip key, snapshot) on the offer grain \u2014 the uniqueness half of the same contract."
     }
   ],
   "downstream": [
@@ -212,6 +238,8 @@
       "int_fare_offers",
       [
         "assert_derived_lead_matches_request",
+        "assert_fare_offers_not_null",
+        "assert_fare_offers_unique_key",
         "assert_fare_price_bounds",
         "int_trip_fares"
       ]

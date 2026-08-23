@@ -5,7 +5,11 @@
       "name": "Run Dataform DAG Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        // The folder the Extension Development Host opens; without it you land in an empty window.
+        "${workspaceFolder}/../../examples/starlog"
+      ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "build"
     }

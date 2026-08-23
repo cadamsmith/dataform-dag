@@ -1,5 +1,24 @@
 import dagre from "@dagrejs/dagre";
-import type { DataformNode, NodeType, SerializedGraph } from "@dataform-dag/core";
+import type { DataformNode, GraphIssue, NodeType, SerializedGraph } from "@dataform-dag/core";
+
+/**
+ * A node as the UI lays it out: core's node plus presentation-only fields. Everything a host sends
+ * is already a valid UiNode; the extras exist for nodes the UI synthesizes itself, like the
+ * assertion clusters from `collapseAssertions`.
+ */
+export interface UiNode extends DataformNode {
+  /** Rendered instead of `id` when present — a cluster's id has to stay unique, not readable. */
+  label?: string;
+  /** How many real nodes this one stands for; absent for an ordinary node. */
+  count?: number;
+}
+
+/** A SerializedGraph whose nodes may carry those extras. */
+export interface UiGraph {
+  nodes: UiNode[];
+  downstream: Array<[string, string[]]>;
+  issues: GraphIssue[];
+}
 
 /** Fill color per node type — the legend the whole UI shares. */
 export const NODE_COLORS: Record<NodeType, string> = {
@@ -14,7 +33,7 @@ export const NODE_COLORS: Record<NodeType, string> = {
 export interface FlowNode {
   id: string;
   position: { x: number; y: number };
-  data: { label: string; nodeType: NodeType; color: string };
+  data: { label: string; nodeType: NodeType; color: string; count?: number };
   width: number;
   height: number;
 }
@@ -38,6 +57,11 @@ export const NODE_H = 46;
 const CHAR_W = 7.7; // ~monospace advance at 13px
 const NODE_PAD = 54; // left accent + horizontal padding
 
+/** What a node shows on the canvas: its own label when it has one, else its id. */
+export function labelOf(node: UiNode): string {
+  return node.label ?? node.id;
+}
+
 /** Estimate a node's rendered width from its label so dagre spacing matches, and nothing truncates. */
 export function nodeWidth(label: string): number {
   return Math.max(150, Math.round(label.length * CHAR_W) + NODE_PAD);
@@ -48,7 +72,7 @@ export function nodeWidth(label: string): number {
  * and DOM-free. An edge is drawn for every `ref` whose target node exists in the graph; a ref to an
  * absent node (external/unresolved) is dropped rather than pointing at a phantom.
  */
-export function layoutGraph(graph: SerializedGraph): FlowGraph {
+export function layoutGraph(graph: UiGraph): FlowGraph {
   const present = new Set(graph.nodes.map((n) => n.id));
   const g = new dagre.graphlib.Graph();
   // LR layered layout. Generous rank/node separation keeps the many cross-edges of a wide fact
@@ -63,7 +87,8 @@ export function layoutGraph(graph: SerializedGraph): FlowGraph {
     marginy: 24,
   });
   g.setDefaultEdgeLabel(() => ({}));
-  for (const node of graph.nodes) g.setNode(node.id, { width: nodeWidth(node.id), height: NODE_H });
+  for (const node of graph.nodes)
+    g.setNode(node.id, { width: nodeWidth(labelOf(node)), height: NODE_H });
   const edges: FlowEdge[] = [];
   for (const node of graph.nodes) {
     for (const upstream of node.refs) {
@@ -75,12 +100,17 @@ export function layoutGraph(graph: SerializedGraph): FlowGraph {
   dagre.layout(g);
   const nodes: FlowNode[] = graph.nodes.map((node) => {
     const laid = g.node(node.id);
-    const width = nodeWidth(node.id);
+    const width = nodeWidth(labelOf(node));
     return {
       id: node.id,
       // dagre centers nodes; React Flow positions by top-left corner.
       position: { x: laid.x - width / 2, y: laid.y - NODE_H / 2 },
-      data: { label: node.id, nodeType: node.type, color: NODE_COLORS[node.type] },
+      data: {
+        label: labelOf(node),
+        nodeType: node.type,
+        color: NODE_COLORS[node.type],
+        count: node.count,
+      },
       width,
       height: NODE_H,
     };

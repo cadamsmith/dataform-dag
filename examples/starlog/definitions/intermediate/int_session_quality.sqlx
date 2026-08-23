@@ -8,7 +8,14 @@ config {
    * referenced by any ref() below, so this edge exists ONLY because it is declared here —
    * a parser that reads ref() alone would miss it entirely.
    */
-  dependencies: ["stg_objects"]
+  dependencies: ["stg_objects"],
+  /*
+   * Only ONE generated assertion (nonNull folds into the single rowConditions action). It stays an
+   * ordinary node on the canvas: a lone assertion has nothing to share a position with.
+   */
+  assertions: {
+    nonNull: ["session_id", "session_date"]
+  }
 }
 
 SELECT

@@ -2,7 +2,12 @@ config {
   type: "view",
   schema: "marts",
   tags: ["marts", "reporting"],
-  description: "One row per observing night, for the reporting layer."
+  description: "One row per observing night, for the reporting layer.",
+  // A second group of two, so the canvas shows more than one cluster at a time.
+  assertions: {
+    uniqueKey: ["session_date"],
+    nonNull: ["session_date", "observer_name"]
+  }
 }
 
 SELECT

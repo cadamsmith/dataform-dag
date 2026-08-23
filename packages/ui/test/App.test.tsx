@@ -224,3 +224,165 @@ describe("compiled mode", () => {
     await waitFor(() => expect(screen.queryByText("SELECT 1")).not.toBeInTheDocument());
   });
 });
+
+describe("assertion grouping", () => {
+  /** Two assertions hanging off the same model — the shape a compiled Dataform graph explodes into. */
+  const withAssertions: SerializedGraph = {
+    nodes: [
+      { id: "src", filePath: "def/src.sqlx", type: "source", tags: [], refs: [] },
+      { id: "fct", filePath: "def/fct.sqlx", type: "table", tags: [], refs: ["src"] },
+      {
+        id: "assert_rows",
+        filePath: "def/assert_rows.sqlx",
+        type: "assertion",
+        tags: ["dq"],
+        refs: ["fct"],
+      },
+      {
+        id: "assert_unique",
+        filePath: "def/assert_unique.sqlx",
+        type: "assertion",
+        tags: [],
+        refs: ["fct"],
+      },
+    ],
+    downstream: [
+      ["src", ["fct"]],
+      ["fct", ["assert_rows", "assert_unique"]],
+    ],
+    issues: [],
+  };
+  const CLUSTER = "assertions:fct";
+
+  it("draws one node for assertions in the same position and counts it against the total", async () => {
+    render(<App bridge={new MockBridge(withAssertions)} />);
+    expect(await screen.findByRole("button", { name: `select:${CLUSTER}` })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "select:assert_rows" })).not.toBeInTheDocument();
+    expect(screen.getByText(/3 \/ 4\s*nodes/)).toBeInTheDocument();
+  });
+
+  it("lists the members, with per-member file actions", async () => {
+    const bridge = new MockBridge(withAssertions, { openFile: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: `select:${CLUSTER}` }));
+
+    const panel = screen.getByRole("complementary");
+    expect(within(panel).getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
+    expect(within(panel).getByText("assert_rows")).toBeInTheDocument();
+    expect(within(panel).getByText("assert_unique")).toBeInTheDocument();
+    // The cluster's upstream is its members' shared parent.
+    expect(within(panel).getByRole("button", { name: "fct" })).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getAllByRole("button", { name: "Go to file" })[0]!);
+    expect(bridge.sent).toContainEqual({
+      type: "openFile",
+      nodeId: "assert_rows",
+      filePath: "def/assert_rows.sqlx",
+    });
+  });
+
+  it("finds a collapsed assertion by name and calls it out inside the cluster", async () => {
+    render(<App bridge={new MockBridge(withAssertions)} />);
+    await screen.findByText(/3 \/ 4\s*nodes/);
+    await userEvent.type(screen.getByRole("searchbox", { name: "Find a node" }), "unique");
+    await userEvent.click(screen.getByRole("button", { name: "assert_unique" }));
+
+    const panel = screen.getByRole("complementary");
+    expect(within(panel).getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
+    expect(within(panel).getByRole("listitem", { current: true })).toHaveTextContent(
+      "assert_unique",
+    );
+  });
+
+  it("opens the cluster when the host focuses a collapsed assertion", async () => {
+    const bridge = new MockBridge(withAssertions);
+    render(<App bridge={bridge} />);
+    await screen.findByText(/3 \/ 4\s*nodes/);
+
+    act(() => bridge.emit({ type: "focusNode", nodeId: "assert_rows" }));
+
+    const panel = await screen.findByRole("complementary");
+    expect(within(panel).getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
+    expect(within(panel).getByRole("listitem", { current: true })).toHaveTextContent("assert_rows");
+  });
+
+  it("renders compiled SQL under the member that asked for it", async () => {
+    const bridge = new MockBridge(withAssertions, { compiledSql: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: `select:${CLUSTER}` }));
+    await userEvent.click(screen.getAllByRole("button", { name: "Compiled SQL" })[0]!);
+    expect(bridge.sent).toContainEqual({
+      type: "showCompiledSql",
+      nodeId: "assert_rows",
+      filePath: "def/assert_rows.sqlx",
+    });
+
+    act(() =>
+      bridge.emit({
+        type: "compiledSqlResult",
+        nodeId: "assert_rows",
+        sections: [{ label: "query", sql: "SELECT 'assert_rows'" }],
+      }),
+    );
+
+    // Scope to that member's row: SQL for one assertion must not render under its sibling.
+    const rowsItem = screen.getByText("assert_rows").closest("li")!;
+    expect(within(rowsItem).getByText("SELECT 'assert_rows'")).toBeInTheDocument();
+    const uniqueItem = screen.getByText("assert_unique").closest("li")!;
+    expect(within(uniqueItem).queryByText("SELECT 'assert_rows'")).not.toBeInTheDocument();
+  });
+
+  it("expands them again when grouping is switched off", async () => {
+    render(<App bridge={new MockBridge(withAssertions)} />);
+    await screen.findByText(/3 \/ 4\s*nodes/);
+
+    await userEvent.click(screen.getByRole("button", { name: "group assertions" }));
+
+    expect(await screen.findByRole("button", { name: "select:assert_rows" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: `select:${CLUSTER}` })).not.toBeInTheDocument();
+    expect(screen.getByText("4 nodes")).toBeInTheDocument();
+  });
+
+  it("leaves a project with no groupable assertions untouched, and hides the toggle", async () => {
+    render(<App bridge={new MockBridge(graph)} />);
+    await screen.findByText("2 nodes");
+    expect(screen.queryByRole("button", { name: "group assertions" })).not.toBeInTheDocument();
+  });
+
+  it("hides the toggle when a lone assertion has nothing to group with", async () => {
+    const oneAssertion: SerializedGraph = {
+      ...withAssertions,
+      nodes: withAssertions.nodes.filter((n) => n.id !== "assert_unique"),
+    };
+    render(<App bridge={new MockBridge(oneAssertion)} />);
+    await screen.findByText("3 nodes");
+    expect(screen.queryByRole("button", { name: "group assertions" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the selection on a real node when grouping is switched off", async () => {
+    render(<App bridge={new MockBridge(withAssertions)} />);
+    await userEvent.click(await screen.findByRole("button", { name: `select:${CLUSTER}` }));
+    expect(screen.getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "group assertions" }));
+
+    // The cluster is gone; the panel follows its first member rather than silently closing.
+    const panel = screen.getByRole("complementary");
+    expect(within(panel).getByRole("heading", { name: "assert_rows" })).toBeInTheDocument();
+  });
+
+  it("follows a selected assertion back into its cluster when grouping is switched on", async () => {
+    render(<App bridge={new MockBridge(withAssertions)} />);
+    await screen.findByText(/3 \/ 4\s*nodes/);
+    await userEvent.click(screen.getByRole("button", { name: "group assertions" }));
+    await userEvent.click(await screen.findByRole("button", { name: "select:assert_unique" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "group assertions" }));
+
+    const panel = screen.getByRole("complementary");
+    expect(within(panel).getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
+    expect(within(panel).getByRole("listitem", { current: true })).toHaveTextContent(
+      "assert_unique",
+    );
+  });
+});

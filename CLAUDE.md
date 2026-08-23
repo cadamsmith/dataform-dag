@@ -25,6 +25,11 @@ npm run dev:ui       # shared UI standalone against a mock graph
   panel and the activity-bar tree are subscribers. Two views computing their own graphs would
   disagree the moment one switched to compiled mode (16 nodes vs 24). The watcher is disposed with
   the extension, NOT with the panel — closing the panel must not stop the tree from updating.
+- **Assertion clusters are UI-only, and the pipeline order is filter → collapse → layout**
+  (`packages/ui/src/collapseAssertions.ts`). A cluster id (`assertions:<parents>`) is synthetic: it
+  names no file and MUST never be sent to a host — `openFile`/`showCompiledSql` always carry a real
+  member node. Collapsing before the tag filter would describe assertions that aren't on screen, and
+  a group with no upstream is never collapsed because the filter strips refs to dropped nodes.
 - **`@dataform-dag/core/browser` is the browser-safe entry** (parser + graph only). The main barrel
   (`.`) re-exports `NodeFileSource` (`node:fs`) and `CompiledGraphSource` (`node:child_process`),
   which break a browser bundle. The web host imports from `/browser`. Don't route browser code

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import type { SerializedGraph } from "@dataform-dag/core";
-import { layoutGraph, type FlowGraph } from "./graphToFlow.js";
+import { layoutGraph, type FlowGraph, type UiGraph } from "./graphToFlow.js";
 import { layoutGraphElk } from "./elkLayout.js";
 
 /**
@@ -8,7 +7,7 @@ import { layoutGraphElk } from "./elkLayout.js";
  * computes. Falls back to the synchronous dagre layout if ELK throws, so the canvas always renders.
  * A stale result from a superseded graph is discarded via the cancel flag.
  */
-export function useLayout(graph: SerializedGraph | null): FlowGraph | null {
+export function useLayout(graph: UiGraph | null): FlowGraph | null {
   const [flow, setFlow] = useState<FlowGraph | null>(null);
   useEffect(() => {
     if (!graph) {

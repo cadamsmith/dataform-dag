@@ -1,13 +1,14 @@
 import type { ElkNode, ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
-import type { SerializedGraph } from "@dataform-dag/core";
 import {
   NODE_COLORS,
   NODE_H,
+  labelOf,
   nodeWidth,
   type FlowEdge,
   type FlowGraph,
   type FlowNode,
   type Point,
+  type UiGraph,
 } from "./graphToFlow.js";
 
 type ElkEngine = { layout(graph: ElkNode): Promise<ElkNode> };
@@ -60,7 +61,7 @@ function pointsOf(edge: ElkExtendedEdge): Point[] | undefined {
  * plus routed `points` per edge. Async (ELK runs its layout engine). Refs to absent nodes are
  * dropped, exactly as in the dagre layout, so the two are interchangeable outputs.
  */
-export async function layoutGraphElk(graph: SerializedGraph): Promise<FlowGraph> {
+export async function layoutGraphElk(graph: UiGraph): Promise<FlowGraph> {
   const present = new Set(graph.nodes.map((n) => n.id));
   const edgeSpecs = [];
   for (const node of graph.nodes) {
@@ -71,7 +72,11 @@ export async function layoutGraphElk(graph: SerializedGraph): Promise<FlowGraph>
   const root: ElkNode = {
     id: "root",
     layoutOptions: LAYOUT_OPTIONS,
-    children: graph.nodes.map((n) => ({ id: n.id, width: nodeWidth(n.id), height: NODE_H })),
+    children: graph.nodes.map((n) => ({
+      id: n.id,
+      width: nodeWidth(labelOf(n)),
+      height: NODE_H,
+    })),
     edges: elkEdgesOf(edgeSpecs),
   };
   const engine = await getEngine();
@@ -82,8 +87,8 @@ export async function layoutGraphElk(graph: SerializedGraph): Promise<FlowGraph>
     return {
       id: n.id,
       position: { x: c?.x ?? 0, y: c?.y ?? 0 }, // ELK origins at top-left, like React Flow
-      data: { label: n.id, nodeType: n.type, color: NODE_COLORS[n.type] },
-      width: nodeWidth(n.id),
+      data: { label: labelOf(n), nodeType: n.type, color: NODE_COLORS[n.type], count: n.count },
+      width: nodeWidth(labelOf(n)),
       height: NODE_H,
     };
   });

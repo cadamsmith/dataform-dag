@@ -37,17 +37,22 @@ type ModelNodeData = {
   nodeType: NodeType;
   selected: boolean;
   dimmed: boolean;
+  /** Set when this node stands for several collapsed ones — see `collapseAssertions`. */
+  count?: number;
 };
 type ModelNode = Node<ModelNodeData, "model">;
 
 /** A model as a card: type-colored left accent, monospace name, type label. Sized by its label. */
 const ModelNode = memo(function ModelNode({ data }: NodeProps<ModelNode>) {
-  const cls = `ddag-node${data.selected ? " is-selected" : ""}${data.dimmed ? " is-dimmed" : ""}`;
+  const cls = `ddag-node${data.selected ? " is-selected" : ""}${data.dimmed ? " is-dimmed" : ""}${
+    data.count ? " is-cluster" : ""
+  }`;
   return (
     <div className={cls} style={{ ["--accent" as string]: data.color }}>
       <Handle type="target" position={Position.Left} className="ddag-node__handle" />
       <span className="ddag-node__label">{data.label}</span>
-      <span className="ddag-node__type">{data.nodeType}</span>
+      {/* A cluster's own label already names the type, so the sub-label says what it IS instead. */}
+      <span className="ddag-node__type">{data.count ? "grouped — click to list" : data.nodeType}</span>
       <Handle type="source" position={Position.Right} className="ddag-node__handle" />
     </div>
   );
@@ -150,6 +155,7 @@ function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): J
           label: n.data.label,
           color: n.data.color,
           nodeType: n.data.nodeType,
+          count: n.data.count,
           selected: false,
           dimmed: false,
         },

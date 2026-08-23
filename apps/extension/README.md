@@ -11,6 +11,9 @@ click switches the canvas over to `dataform compile`.
 
 - **See the whole graph at a glance.** Every model, source, view, and assertion in your project,
   laid out left-to-right by dependency with a color-coded legend and a minimap for large projects.
+- **Stay readable at scale.** Assertions that hang off the same models collapse into a single
+  "N assertions" node — click it to list them, with each one's file and compiled SQL still one click
+  away. Toggle grouping off from the toolbar when you want them all on the canvas.
 - **Find anything fast.** Search nodes by name, or filter the canvas down to one or more Dataform
   `tags` — the node count in the top bar tracks what's visible.
 - **Inspect a node.** Click one for its type, tags, file path, and upstream/downstream refs — and

@@ -1,6 +1,12 @@
 export { App, type AppProps } from "./App.js";
 export { allTags, filterGraphByTags } from "./filterGraph.js";
 export {
+  CLUSTER_PREFIX,
+  collapseAssertions,
+  isClusterId,
+  type CollapsedGraph,
+} from "./collapseAssertions.js";
+export {
   type CompilationStatus,
   type CompiledSqlSection,
   type GraphMode,
@@ -19,4 +25,6 @@ export {
   downstreamOf,
   type FlowGraph,
   type GraphIndex,
+  type UiGraph,
+  type UiNode,
 } from "./graphToFlow.js";
