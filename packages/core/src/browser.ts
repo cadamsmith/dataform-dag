@@ -5,7 +5,13 @@
  * behind the package's main entry and are deliberately absent; a browser host supplies its own
  * {@link FileSource} and drives `parseSqlx` + `buildGraph` itself.
  */
-export type { NodeType, DataformNode, DataformGraph, SerializedGraph } from "./types.js";
+export type {
+  NodeType,
+  DataformNode,
+  DataformGraph,
+  SerializedGraph,
+  GraphIssue,
+} from "./types.js";
 export type { FileSource } from "./fileSource.js";
 export { parseSqlx, extractRefs, extractConfigBlock, basename } from "./parser.js";
 export {

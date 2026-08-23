@@ -22,6 +22,7 @@ const graph: SerializedGraph = {
     { id: "mid", filePath: "mid.sqlx", type: "table", tags: [], refs: ["src"] },
   ],
   downstream: [["src", ["mid"]]],
+  issues: [],
 };
 
 describe("DagGraph (real React Flow canvas)", () => {

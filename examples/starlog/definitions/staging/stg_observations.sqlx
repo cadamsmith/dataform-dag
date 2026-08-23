@@ -1,0 +1,16 @@
+config {
+  type: "view",
+  schema: "staging",
+  tags: ["staging", "core"],
+  description: "Cleaned observation log entries."
+}
+
+SELECT
+  observation_id,
+  session_id,
+  object_id,
+  observed_at,
+  magnitude_estimate,
+  eyepiece_mm
+FROM ${ref("raw_observations")}
+WHERE observation_id IS NOT NULL

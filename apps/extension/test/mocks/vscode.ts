@@ -142,10 +142,32 @@ export function resetMock(): void {
   records.errors.length = 0;
   records.shownDocs.length = 0;
   workspace.workspaceFolders = undefined;
+  window.activeTextEditor = undefined;
   vi.clearAllMocks();
 }
 
-export const window = {
+/** A `workspaceState`-shaped memento backed by a plain Map, for the fake ExtensionContext. */
+export function makeMemento(initial: Record<string, unknown> = {}) {
+  const store = new Map(Object.entries(initial));
+  return {
+    get: vi.fn((key: string) => store.get(key)),
+    update: vi.fn((key: string, value: unknown) => {
+      store.set(key, value);
+      return Promise.resolve();
+    }),
+    keys: () => [...store.keys()],
+  };
+}
+
+export const window: {
+  activeTextEditor: { document: { uri: MockUri } } | undefined;
+  createWebviewPanel: (id: string, title: string, col: number, opts: unknown) => MockPanel;
+  onDidChangeActiveTextEditor: (cb: (editor: unknown) => void) => MockDisposable;
+  showWarningMessage: (msg: string) => Promise<undefined>;
+  showErrorMessage: (msg: string) => Promise<undefined>;
+  showTextDocument: (u: MockUri, opts: unknown) => Promise<undefined>;
+} = {
+  activeTextEditor: undefined,
   createWebviewPanel: vi.fn((_id: string, _title: string, _col: number, _opts: unknown) => {
     const panel = new MockPanel();
     records.panels.push(panel);

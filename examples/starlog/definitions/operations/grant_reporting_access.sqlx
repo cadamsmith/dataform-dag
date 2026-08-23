@@ -1,0 +1,20 @@
+config {
+  type: "operations",
+  schema: "marts",
+  tags: ["ops", "reporting"],
+  description: "Grants and bookkeeping for the reporting layer.",
+  /*
+   * Demonstrates the BARE-STRING form of config.dependencies — Dataform accepts a single name
+   * without an array wrapper.
+   */
+  dependencies: "agg_nightly_summary"
+}
+
+-- An operations action compiles to a LIST of statements. The detail panel numbers them.
+CREATE SCHEMA IF NOT EXISTS ${dataform.projectConfig.defaultSchema}_reporting
+---
+GRANT `roles/bigquery.dataViewer`
+  ON SCHEMA ${dataform.projectConfig.defaultSchema}_reporting
+  TO "group:astronomy-readers@example.com"
+---
+SELECT CURRENT_TIMESTAMP() AS reporting_access_last_applied

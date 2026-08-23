@@ -1,0 +1,6 @@
+config {
+  type: "declaration",
+  schema: "raw",
+  name: "raw_sessions",
+  description: "One row per night a telescope was set up."
+}

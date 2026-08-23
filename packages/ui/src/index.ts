@@ -1,5 +1,9 @@
 export { App, type AppProps } from "./App.js";
+export { allTags, filterGraphByTags } from "./filterGraph.js";
 export {
+  type CompilationStatus,
+  type CompiledSqlSection,
+  type GraphMode,
   type HostBridge,
   type HostCapabilities,
   type InboundMsg,

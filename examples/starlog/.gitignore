@@ -1,0 +1,3 @@
+# `dataform compile` vendors @dataform/core here on first run.
+node_modules/
+.df-credentials.json

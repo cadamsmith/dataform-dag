@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import type { SerializedGraph } from "@dataform-dag/core";
+import { allTags, filterGraphByTags } from "../src/filterGraph.js";
+
+const graph: SerializedGraph = {
+  nodes: [
+    { id: "src", filePath: "src.sqlx", type: "source", tags: ["raw"], refs: [] },
+    { id: "mid", filePath: "mid.sqlx", type: "table", tags: ["core", "raw"], refs: ["src"] },
+    { id: "leaf", filePath: "leaf.sqlx", type: "view", tags: ["mart"], refs: ["mid"] },
+  ],
+  downstream: [
+    ["src", ["mid"]],
+    ["mid", ["leaf"]],
+  ],
+  issues: [{ kind: "unresolved-reference", nodeId: "src", filePath: "src.sqlx", reference: "gone" }],
+};
+
+describe("allTags", () => {
+  it("collects every tag once", () => {
+    expect(allTags(graph).sort()).toEqual(["core", "mart", "raw"]);
+  });
+
+  it("is empty for an untagged graph", () => {
+    expect(allTags({ nodes: [], downstream: [], issues: [] })).toEqual([]);
+  });
+});
+
+describe("filterGraphByTags", () => {
+  it("returns the same graph when nothing is selected", () => {
+    expect(filterGraphByTags(graph, [])).toBe(graph);
+  });
+
+  it("keeps nodes carrying any selected tag (OR, not AND)", () => {
+    const out = filterGraphByTags(graph, ["core", "mart"]);
+    expect(out.nodes.map((n) => n.id)).toEqual(["mid", "leaf"]);
+  });
+
+  it("drops refs pointing at nodes the filter removed", () => {
+    const out = filterGraphByTags(graph, ["core"]);
+    expect(out.nodes).toHaveLength(1);
+    expect(out.nodes[0]?.refs).toEqual([]); // "src" was filtered out
+  });
+
+  it("drops downstream entries whose endpoints did not survive", () => {
+    const out = filterGraphByTags(graph, ["mart"]);
+    expect(out.downstream).toEqual([]);
+  });
+
+  it("keeps a downstream edge when both ends survive", () => {
+    const out = filterGraphByTags(graph, ["raw", "mart"]);
+    expect(out.downstream).toEqual([
+      ["src", ["mid"]],
+      ["mid", ["leaf"]],
+    ]);
+  });
+
+  it("carries project-wide issues through untouched", () => {
+    // Recomputing diagnostics on the filtered set would report every hidden dependency as unresolved.
+    expect(filterGraphByTags(graph, ["mart"]).issues).toEqual(graph.issues);
+  });
+
+  it("does not mutate the input graph", () => {
+    filterGraphByTags(graph, ["core"]);
+    expect(graph.nodes[1]?.refs).toEqual(["src"]);
+  });
+});

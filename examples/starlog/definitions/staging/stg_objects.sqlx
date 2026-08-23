@@ -1,0 +1,15 @@
+config {
+  type: "view",
+  schema: "staging",
+  tags: ["staging", "reference"],
+  description: "Celestial object catalogue, normalised."
+}
+
+SELECT
+  object_id,
+  UPPER(catalogue) AS catalogue,
+  object_name,
+  object_type,
+  constellation,
+  apparent_magnitude
+FROM ${ref("raw_objects")}

@@ -8,13 +8,16 @@ import {
 } from "@dataform-dag/core/browser";
 
 /**
- * {@link HostBridge} for the browser. A page can't open an editor, watch files, or track an active
- * editor, so every capability is off — the UI hides "Go to file" and shows its manual Refresh button.
- * The graph is (re)built in-page from the picked {@link FileSource} on `ready` / `requestRefresh`.
+ * {@link HostBridge} for the browser. A page can't open an editor, watch files, track an active
+ * editor, or spawn the Dataform CLI, so every capability is off — the UI hides "Go to file" and the
+ * compiled-mode controls, and shows its manual Refresh button. The graph is (re)built in-page from
+ * the picked {@link FileSource} on `ready` / `requestRefresh`.
  */
 export class BrowserBridge implements HostBridge {
   readonly capabilities: HostCapabilities = {
     openFile: false,
+    compiledSql: false,
+    compiledGraph: false,
     liveWatch: false,
     focusOnActive: false,
   };

@@ -1,28 +1,70 @@
 import { useEffect, useState } from "react";
-import type { HostBridge, SerializedGraph } from "./HostBridge.js";
+import type {
+  CompilationStatus,
+  CompiledSqlSection,
+  GraphMode,
+  HostBridge,
+  SerializedGraph,
+} from "./HostBridge.js";
 
 export interface HostBridgeState {
   graph: SerializedGraph | null;
   /** The node the host last asked to focus (e.g. active editor changed). Cleared after consumption. */
   focusRequest: { nodeId: string; nonce: number } | null;
+  compilationStatus: CompilationStatus;
+  graphMode: GraphMode;
+  compiledSql: { nodeId: string; sections: CompiledSqlSection[] } | null;
+  compiledSqlError: { nodeId: string; message: string } | null;
+  /** Filter the host restored from its own storage, or null if it never sent one. */
+  savedTagFilter: string[] | null;
 }
 
 /**
  * Subscribe a component to a {@link HostBridge}: sends `ready` on mount (so the host knows to push
- * the initial graph), then tracks `graphUpdate` / `focusNode`. `focusRequest` carries a nonce so a
+ * the initial graph), then tracks everything the host pushes. `focusRequest` carries a nonce so a
  * repeated focus of the same node still re-fires downstream effects.
  */
 export function useHostBridge(bridge: HostBridge): HostBridgeState {
   const [graph, setGraph] = useState<SerializedGraph | null>(null);
   const [focusRequest, setFocusRequest] = useState<HostBridgeState["focusRequest"]>(null);
+  const [compilationStatus, setCompilationStatus] = useState<CompilationStatus>("idle");
+  const [graphMode, setGraphMode] = useState<GraphMode>("parsed");
+  const [compiledSql, setCompiledSql] = useState<HostBridgeState["compiledSql"]>(null);
+  const [compiledSqlError, setCompiledSqlError] =
+    useState<HostBridgeState["compiledSqlError"]>(null);
+  const [savedTagFilter, setSavedTagFilter] = useState<string[] | null>(null);
   useEffect(() => {
     let nonce = 0;
     const unsubscribe = bridge.onMessage((msg) => {
       if (msg.type === "graphUpdate") setGraph(msg.graph);
       else if (msg.type === "focusNode") setFocusRequest({ nodeId: msg.nodeId, nonce: ++nonce });
+      else if (msg.type === "compilationStatus") {
+        setCompilationStatus(msg.status);
+        // A run that is starting (or was reset) invalidates whatever SQL is on screen — it was
+        // produced by the previous compile and may no longer match the file.
+        if (msg.status === "idle" || msg.status === "compiling") {
+          setCompiledSql(null);
+          setCompiledSqlError(null);
+        }
+      } else if (msg.type === "compiledSqlResult") {
+        setCompiledSql({ nodeId: msg.nodeId, sections: msg.sections });
+        setCompiledSqlError(null);
+      } else if (msg.type === "compiledSqlError") {
+        setCompiledSqlError({ nodeId: msg.nodeId, message: msg.message });
+        setCompiledSql(null);
+      } else if (msg.type === "tagFilterState") setSavedTagFilter(msg.selectedTags);
+      else if (msg.type === "graphModeState") setGraphMode(msg.mode);
     });
     bridge.send({ type: "ready" });
     return unsubscribe;
   }, [bridge]);
-  return { graph, focusRequest };
+  return {
+    graph,
+    focusRequest,
+    compilationStatus,
+    graphMode,
+    compiledSql,
+    compiledSqlError,
+    savedTagFilter,
+  };
 }

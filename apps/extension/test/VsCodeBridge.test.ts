@@ -33,6 +33,8 @@ describe("VsCodeBridge", () => {
     const { VsCodeBridge } = await import("../webview/VsCodeBridge.js");
     expect(new VsCodeBridge().capabilities).toEqual({
       openFile: true,
+      compiledSql: true,
+      compiledGraph: true,
       liveWatch: true,
       focusOnActive: true,
     });

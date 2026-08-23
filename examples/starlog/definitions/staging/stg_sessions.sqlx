@@ -1,0 +1,16 @@
+config {
+  type: "view",
+  schema: "staging",
+  tags: ["staging", "core"],
+  description: "Cleaned observing sessions, one row per telescope-night."
+}
+
+SELECT
+  session_id,
+  observer_name,
+  telescope,
+  CAST(session_date AS DATE) AS session_date,
+  seeing_arcsec,
+  bortle_class
+FROM ${ref("raw_sessions")}
+WHERE session_id IS NOT NULL

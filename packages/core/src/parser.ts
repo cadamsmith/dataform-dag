@@ -18,9 +18,24 @@ export function parseSqlx(filePath: string, content: string): DataformNode {
     filePath,
     type: mapType(declaredType),
     tags: config ? parseTags(config) : [],
-    refs: extractRefs(content),
+    // `ref()` calls and `config.dependencies` are two independent ways to declare the same edge, so
+    // the node's upstream set is their union — refs first, since that's the common form.
+    refs: mergeDeduped(extractRefs(content), config ? parseDependencies(config) : []),
     description: config ? parseDescription(config) : undefined,
   };
+}
+
+/** Concatenate preserving `first`'s order, dropping anything already present. */
+function mergeDeduped(first: string[], second: string[]): string[] {
+  const out = [...first];
+  const seen = new Set(first);
+  for (const value of second) {
+    if (!seen.has(value)) {
+      seen.add(value);
+      out.push(value);
+    }
+  }
+  return out;
 }
 
 /** Filename without directory or the `.sqlx` extension. Works on POSIX and Windows separators. */
@@ -102,11 +117,45 @@ function skipString(s: string, open: number, q: string): number {
   return s.length;
 }
 
-/** `key: "value"` / `key: 'value'` — first occurrence, single-line value. */
-function matchString(block: string, key: string): string | undefined {
-  const re = new RegExp(`\\b${key}\\s*:\\s*(["'])((?:\\\\.|(?!\\1).)*)\\1`, "s");
-  const m = re.exec(block);
-  return m ? unescape(m[2] ?? "") : undefined;
+/**
+ * Nesting depth at every index of `block`, counting `{`/`[` and skipping string literals so a brace
+ * inside a description can't shift it. Depth 0 is the config object's own level.
+ */
+function depthMap(block: string): number[] {
+  const depth = new Array<number>(block.length).fill(0);
+  let d = 0;
+  for (let i = 0; i < block.length; i++) {
+    const ch = block[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const end = skipString(block, i, ch);
+      for (let j = i; j <= end && j < block.length; j++) depth[j] = d;
+      i = end;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      depth[i] = d;
+      d++;
+    } else if (ch === "}" || ch === "]") {
+      d--;
+      depth[i] = d;
+    } else {
+      depth[i] = d;
+    }
+  }
+  return depth;
+}
+
+/**
+ * `key: "value"` / `key: 'value'` at the config's TOP level. Depth matters: a target object in
+ * `dependencies: [{ schema: "staging", name: "stg_sessions" }]` carries its own `name`, and a
+ * first-match-anywhere read would adopt it as the action's id. Nested keys are skipped.
+ */
+function matchString(block: string, key: string, depths = depthMap(block)): string | undefined {
+  const re = new RegExp(`\\b${key}\\s*:\\s*(["'])((?:\\\\.|(?!\\1).)*)\\1`, "gs");
+  for (let m = re.exec(block); m; m = re.exec(block)) {
+    if (depths[m.index] === 0) return unescape(m[2] ?? "");
+  }
+  return undefined;
 }
 
 /**
@@ -117,15 +166,55 @@ function parseDescription(block: string): string | undefined {
   return matchString(block, "description");
 }
 
+/** The first top-level `key: <value>` capture, ignoring the same key nested inside a sub-object. */
+function matchTopLevel(block: string, re: RegExp): string | undefined {
+  const depths = depthMap(block);
+  for (let m = re.exec(block); m; m = re.exec(block)) {
+    if (depths[m.index] === 0) return m[1];
+  }
+  return undefined;
+}
+
 /** `tags: "x"` or `tags: ["a", "b"]` → string[]. */
 function parseTags(block: string): string[] {
-  const m = /\btags\s*:\s*(\[[^\]]*\]|(["'])(?:\\.|(?!\2).)*\2)/s.exec(block);
-  if (!m || m[1] === undefined) return [];
-  const raw = m[1].trim();
+  const value = matchTopLevel(block, /\btags\s*:\s*(\[[^\]]*\]|(["'])(?:\\.|(?!\2).)*\2)/gs);
+  if (value === undefined) return [];
+  const raw = value.trim();
   if (raw.startsWith("[")) {
     return [...raw.matchAll(/(["'])((?:\\.|(?!\1).)*)\1/gs)].map((g) => unescape(g[2] ?? ""));
   }
   return [unescape(raw.slice(1, -1))];
+}
+
+/**
+ * `config.dependencies` — the explicit dependency list, which declares edges that no `ref()` call
+ * expresses (a common pattern for `operations` and for ordering against an assertion). Accepts the
+ * three shapes Dataform itself takes: a bare string, an array of strings, and an array of target
+ * objects, where only `name` is the id `ref()` resolves against — `schema`/`database` alongside it
+ * describe where the action lands, not what it's called. Order-preserving.
+ */
+function parseDependencies(block: string): string[] {
+  const value = matchTopLevel(
+    block,
+    /\bdependencies\s*:\s*(\[[\s\S]*?\]|(["'])(?:\\.|(?!\2).)*\2)/gs,
+  );
+  if (value === undefined) return [];
+  const raw = value.trim();
+  if (!raw.startsWith("[")) return [unescape(raw.slice(1, -1))];
+  const out: string[] = [];
+  // Match an object entry or a bare string entry. Taking objects as whole `{...}` chunks keeps the
+  // string branch from harvesting a target's `schema` value as if it were an action name.
+  for (const entry of raw.slice(1, -1).matchAll(/\{[^}]*\}|(["'])((?:\\.|(?!\1).)*)\1/gs)) {
+    const text = entry[0];
+    if (text.startsWith("{")) {
+      // Pass the object's INNER text so its keys sit at depth 0 for the top-level match.
+      const name = matchString(text.slice(1, -1), "name");
+      if (name) out.push(name);
+    } else if (entry[2]) {
+      out.push(unescape(entry[2]));
+    }
+  }
+  return out;
 }
 
 /**

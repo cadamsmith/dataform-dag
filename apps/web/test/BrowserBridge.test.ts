@@ -53,9 +53,11 @@ describe("BrowserBridge", () => {
     expect(graph.nodes).toHaveLength(2);
   });
 
-  it("declares no host capabilities (browser can't open/watch/focus)", () => {
+  it("declares no host capabilities (browser can't open/watch/focus/compile)", () => {
     expect(new BrowserBridge(source).capabilities).toEqual({
       openFile: false,
+      compiledSql: false,
+      compiledGraph: false,
       liveWatch: false,
       focusOnActive: false,
     });

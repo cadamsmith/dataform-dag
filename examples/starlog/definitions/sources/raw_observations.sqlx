@@ -1,0 +1,6 @@
+config {
+  type: "declaration",
+  schema: "raw",
+  name: "raw_observations",
+  description: "One row per object logged during a session."
+}

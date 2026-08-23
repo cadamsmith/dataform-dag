@@ -1,0 +1,19 @@
+config {
+  type: "view",
+  schema: "marts",
+  tags: ["marts", "reporting"],
+  description: "One row per observing night, for the reporting layer."
+}
+
+SELECT
+  q.session_date,
+  q.observer_name,
+  q.quality_score,
+  COUNT(f.observation_id) AS observations,
+  MIN(f.magnitude_estimate) AS faintest_magnitude
+FROM ${ref("int_session_quality")} AS q
+LEFT JOIN ${ref("fct_observations")} AS f
+  ON f.session_id = q.session_id
+-- Retired 2026-02: the legacy roll-up was replaced by int_session_quality.
+-- LEFT JOIN ${ref("legacy_nightly_rollup")} AS l ON l.session_date = q.session_date
+GROUP BY 1, 2, 3

@@ -1,0 +1,15 @@
+config {
+  type: "assertion",
+  schema: "assertions",
+  tags: ["quality"],
+  description: "Every observation must belong to a known session.",
+  /*
+   * Demonstrates the TARGET-OBJECT form of config.dependencies. Only `name` identifies the
+   * action — `schema` says where it lands, not what it is called.
+   */
+  dependencies: [{ schema: "staging", name: "stg_sessions" }]
+}
+
+SELECT observation_id
+FROM ${ref("fct_observations")}
+WHERE session_id IS NULL

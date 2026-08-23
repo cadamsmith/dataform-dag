@@ -1,4 +1,4 @@
-import type { DataformNode } from "@dataform-dag/core";
+import type { CompiledSqlSection, DataformNode } from "@dataform-dag/core";
 import { NODE_COLORS } from "./graphToFlow.js";
 
 export interface NodeDetailPanelProps {
@@ -7,15 +7,23 @@ export interface NodeDetailPanelProps {
   downstream: string[];
   /** Present only when the host advertises `openFile`; rendering is gated on it. */
   onOpenFile?: (node: DataformNode) => void;
+  /** Present only when the host advertises `compiledSql`. */
+  onShowCompiledSql?: (node: DataformNode) => void;
+  /** Sections for THIS node, or null when none have been fetched (the caller matches on nodeId). */
+  compiledSql?: CompiledSqlSection[] | null;
+  compiledSqlError?: string | null;
   onSelect: (nodeId: string) => void;
 }
 
-/** Type, tags, description, direct upstream/downstream, and a capability-gated "Go to file". */
+/** Type, tags, description, direct upstream/downstream, and capability-gated file/SQL actions. */
 export function NodeDetailPanel({
   node,
   upstream,
   downstream,
   onOpenFile,
+  onShowCompiledSql,
+  compiledSql = null,
+  compiledSqlError = null,
   onSelect,
 }: NodeDetailPanelProps): JSX.Element {
   return (
@@ -38,12 +46,39 @@ export function NodeDetailPanel({
       {node.description && <p className="ddag-detail__desc">{node.description}</p>}
       <NeighborList title="Upstream (depends on)" ids={upstream} onSelect={onSelect} />
       <NeighborList title="Downstream (dependents)" ids={downstream} onSelect={onSelect} />
-      {onOpenFile && (
-        <button type="button" className="ddag-btn" onClick={() => onOpenFile(node)}>
-          Go to file
-        </button>
-      )}
+      <div className="ddag-detail__actions">
+        {onOpenFile && (
+          <button type="button" className="ddag-btn" onClick={() => onOpenFile(node)}>
+            Go to file
+          </button>
+        )}
+        {onShowCompiledSql && (
+          <button type="button" className="ddag-btn" onClick={() => onShowCompiledSql(node)}>
+            Compiled SQL
+          </button>
+        )}
+      </div>
+      {compiledSqlError && <p className="ddag-detail__error">{compiledSqlError}</p>}
+      {compiledSql && <CompiledSql sections={compiledSql} />}
     </aside>
+  );
+}
+
+function CompiledSql({ sections }: { sections: CompiledSqlSection[] }): JSX.Element {
+  if (sections.length === 0) {
+    return <p className="ddag-neighbors__empty">This action compiles to no SQL.</p>;
+  }
+  return (
+    <section className="ddag-sql">
+      {sections.map((section, i) => (
+        <div key={`${section.label}-${i}`} className="ddag-sql__section">
+          <h3 className="ddag-sql__label">{section.label}</h3>
+          <pre className="ddag-sql__code">
+            <code>{section.sql}</code>
+          </pre>
+        </div>
+      ))}
+    </section>
   );
 }
 

@@ -33,6 +33,42 @@ describe("buildGraph", () => {
   });
 });
 
+describe("diagnostics", () => {
+  it("reports no issues for a fully resolved graph", () => {
+    expect(buildGraph(nodes).issues).toEqual([]);
+  });
+
+  it("reports a ref that resolves to no node", () => {
+    const g = buildGraph([node("x", ["missing"])]);
+    expect(g.issues).toEqual([
+      { kind: "unresolved-reference", nodeId: "x", filePath: "x.sqlx", reference: "missing" },
+    ]);
+  });
+
+  it("reports one issue per (node, reference) pair, not per occurrence", () => {
+    // buildGraph sees deduped refs, but two different nodes missing the same target are two issues.
+    const g = buildGraph([node("x", ["missing"]), node("y", ["missing"])]);
+    expect(g.issues).toHaveLength(2);
+    expect(g.issues.map((i) => i.nodeId).sort()).toEqual(["x", "y"]);
+  });
+
+  it("reports an id claimed by more than one file", () => {
+    const g = buildGraph([
+      { id: "dup", filePath: "one.sqlx", type: "table", tags: [], refs: [] },
+      { id: "dup", filePath: "two.sqlx", type: "view", tags: [], refs: [] },
+    ]);
+    expect(g.issues).toEqual([
+      { kind: "duplicate-node-id", nodeId: "dup", filePaths: ["one.sqlx", "two.sqlx"] },
+    ]);
+    expect(g.nodes.size).toBe(1); // ...and only one of them is reachable
+  });
+
+  it("does not flag a unique id as duplicate", () => {
+    const g = buildGraph([node("a"), node("b")]);
+    expect(g.issues.filter((i) => i.kind === "duplicate-node-id")).toEqual([]);
+  });
+});
+
 describe("traversal", () => {
   const g = buildGraph(nodes);
   it("collects transitive ancestors (upstream)", () => {
@@ -54,5 +90,16 @@ describe("serialize round-trip", () => {
     const back = deserializeGraph(serializeGraph(g));
     expect([...back.nodes.keys()].sort()).toEqual([...g.nodes.keys()].sort());
     expect([...(back.downstreamMap.get("b") ?? [])].sort()).toEqual(["c", "d"]);
+  });
+
+  it("carries issues across the wire", () => {
+    const g = buildGraph([node("x", ["missing"])]);
+    const back = deserializeGraph(JSON.parse(JSON.stringify(serializeGraph(g))));
+    expect(back.issues).toEqual(g.issues);
+  });
+
+  it("defaults issues to [] when the payload predates diagnostics", () => {
+    const legacy = { nodes: [], downstream: [] } as unknown as ReturnType<typeof serializeGraph>;
+    expect(deserializeGraph(legacy).issues).toEqual([]);
   });
 });

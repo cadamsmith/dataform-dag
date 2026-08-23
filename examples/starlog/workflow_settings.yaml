@@ -1,0 +1,7 @@
+# Minimal settings so `dataform compile` runs with no BigQuery connection and no credentials.
+# Nothing here is ever executed against a warehouse — compilation only resolves SQL locally.
+dataformCoreVersion: 3.0.0
+defaultProject: starlog-demo
+defaultDataset: starlog
+defaultAssertionDataset: starlog_assertions
+defaultLocation: US

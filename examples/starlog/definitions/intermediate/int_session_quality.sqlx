@@ -1,0 +1,25 @@
+config {
+  type: "table",
+  schema: "intermediate",
+  tags: ["intermediate", "core"],
+  description: "Per-session sky quality score derived from seeing and Bortle class.",
+  /*
+   * Demonstrates the ARRAY-OF-STRINGS form of config.dependencies. `stg_objects` is not
+   * referenced by any ref() below, so this edge exists ONLY because it is declared here —
+   * a parser that reads ref() alone would miss it entirely.
+   */
+  dependencies: ["stg_objects"]
+}
+
+SELECT
+  s.session_id,
+  s.session_date,
+  s.observer_name,
+  s.seeing_arcsec,
+  s.bortle_class,
+  ROUND((10 - s.bortle_class) * (5.0 / NULLIF(s.seeing_arcsec, 0)), 2) AS quality_score,
+  COUNT(o.observation_id) AS observation_count
+FROM ${ref("stg_sessions")} AS s
+LEFT JOIN ${ref("stg_observations")} AS o
+  ON o.session_id = s.session_id
+GROUP BY 1, 2, 3, 4, 5

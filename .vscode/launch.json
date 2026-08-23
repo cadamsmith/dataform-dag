@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
+        // The folder the Extension Development Host opens: the in-repo example project, which is
+        // built to exercise every feature. Swap this path to test against a project of your own.
+        "${workspaceFolder}/examples/starlog"
+      ],
+      "outFiles": ["${workspaceFolder}/apps/extension/dist/**/*.js"]
+    }
+  ]
+}

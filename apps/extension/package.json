@@ -33,11 +33,23 @@
   "categories": ["Visualization", "Other"],
   "main": "./dist/extension.js",
   "activationEvents": [],
+  "extensionKind": ["workspace"],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Compiled mode runs `dataform compile`, which evaluates the project's own JavaScript and includes."
+    }
+  },
   "contributes": {
     "commands": [
       {
         "command": "dataformDag.showGraph",
         "title": "Show Graph",
+        "category": "Dataform DAG"
+      },
+      {
+        "command": "dataformDag.showCompiledSql",
+        "title": "Show Compiled SQL",
         "category": "Dataform DAG"
       }
     ]

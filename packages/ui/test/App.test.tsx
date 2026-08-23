@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SerializedGraph } from "@dataform-dag/core";
 import type { DagGraphProps } from "../src/DagGraph.js";
@@ -31,6 +31,7 @@ const graph: SerializedGraph = {
     { id: "mid", filePath: "def/mid.sqlx", type: "table", tags: ["core"], refs: ["src"], description: "a middle node" },
   ],
   downstream: [["src", ["mid"]]],
+  issues: [],
 };
 
 describe("App", () => {
@@ -80,5 +81,146 @@ describe("App", () => {
     render(<App bridge={new MockBridge(graph, { openFile: false })} />);
     await userEvent.click(await screen.findByRole("button", { name: "select:mid" }));
     expect(screen.queryByRole("button", { name: "Go to file" })).not.toBeInTheDocument();
+  });
+});
+
+describe("node search", () => {
+  it("jumps to a matching node and opens its detail panel", async () => {
+    render(<App bridge={new MockBridge(graph)} />);
+    await screen.findByText("2 nodes");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Find a node" }), "mi");
+    await userEvent.click(screen.getByRole("button", { name: "mid" }));
+    expect(within(screen.getByRole("complementary")).getByRole("heading", { name: "mid" }))
+      .toBeInTheDocument();
+  });
+
+  it("reports no match rather than an empty menu", async () => {
+    render(<App bridge={new MockBridge(graph)} />);
+    await screen.findByText("2 nodes");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Find a node" }), "zzz");
+    expect(screen.getByText("no match")).toBeInTheDocument();
+  });
+});
+
+describe("tag filter", () => {
+  it("narrows the graph and reports the filtered count against the total", async () => {
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    await userEvent.click(screen.getByText("Tags"));
+    await userEvent.click(screen.getByRole("checkbox", { name: "core" }));
+    expect(await screen.findByText(/1 \/ 2\s*nodes/)).toBeInTheDocument();
+    expect(bridge.sent).toContainEqual({ type: "setTagFilter", selectedTags: ["core"] });
+  });
+
+  it("restores a filter the host persisted", async () => {
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["core"] }));
+    expect(await screen.findByText(/1 \/ 2\s*nodes/)).toBeInTheDocument();
+  });
+});
+
+describe("diagnostics", () => {
+  const withIssues: SerializedGraph = {
+    ...graph,
+    issues: [
+      { kind: "unresolved-reference", nodeId: "mid", filePath: "def/mid.sqlx", reference: "gone" },
+    ],
+  };
+
+  it("stays hidden when the graph is clean", async () => {
+    render(<App bridge={new MockBridge(graph)} />);
+    await screen.findByText("2 nodes");
+    expect(screen.queryByText(/issue/)).not.toBeInTheDocument();
+  });
+
+  it("lists an unresolved reference and explains the parsed-mode caveat", async () => {
+    render(<App bridge={new MockBridge(withIssues)} />);
+    await userEvent.click(await screen.findByText("1 issue"));
+    expect(screen.getByText("gone")).toBeInTheDocument();
+    expect(screen.getByText(/Parsed mode reads files literally/)).toBeInTheDocument();
+  });
+});
+
+describe("compiled mode", () => {
+  it("hides the mode toggle when the host cannot compile", async () => {
+    render(<App bridge={new MockBridge(graph, { compiledGraph: false })} />);
+    await screen.findByText("2 nodes");
+    expect(screen.queryByRole("button", { name: "compiled" })).not.toBeInTheDocument();
+  });
+
+  it("asks the host to switch mode", async () => {
+    const bridge = new MockBridge(graph, { compiledGraph: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "compiled" }));
+    expect(bridge.sent).toContainEqual({ type: "setGraphMode", mode: "compiled" });
+  });
+
+  it("surfaces compilation status", async () => {
+    const bridge = new MockBridge(graph, { compiledGraph: true });
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    act(() => bridge.emit({ type: "compilationStatus", status: "compiling" }));
+    expect(await screen.findByText("compiling…")).toBeInTheDocument();
+  });
+
+  it("requests compiled SQL and renders the returned sections in order", async () => {
+    const bridge = new MockBridge(graph, { compiledSql: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "select:mid" }));
+    await userEvent.click(screen.getByRole("button", { name: "Compiled SQL" }));
+    expect(bridge.sent).toContainEqual({
+      type: "showCompiledSql",
+      nodeId: "mid",
+      filePath: "def/mid.sqlx",
+    });
+    act(() => bridge.emit({
+      type: "compiledSqlResult",
+      nodeId: "mid",
+      sections: [
+      { label: "pre_operations", sql: "DECLARE x INT64" },
+      { label: "query", sql: "SELECT 1" },
+      ],
+      }));
+    const labels = (await screen.findAllByRole("heading", { level: 3 })).map((h) => h.textContent);
+    expect(labels).toContain("pre_operations");
+    expect(labels.indexOf("pre_operations")).toBeLessThan(labels.indexOf("query"));
+    expect(screen.getByText("SELECT 1")).toBeInTheDocument();
+  });
+
+  it("does not render SQL fetched for a different node", async () => {
+    const bridge = new MockBridge(graph, { compiledSql: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "select:mid" }));
+    act(() => bridge.emit({
+      type: "compiledSqlResult",
+      nodeId: "src",
+      sections: [{ label: "query", sql: "SELECT 'wrong node'" }],
+      }));
+    await waitFor(() => expect(screen.queryByText("SELECT 'wrong node'")).not.toBeInTheDocument());
+  });
+
+  it("shows a compile error for the selected node", async () => {
+    const bridge = new MockBridge(graph, { compiledSql: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "select:mid" }));
+    act(() => bridge.emit({ type: "compiledSqlError", nodeId: "mid", message: "dataform CLI not found" }));
+    expect(await screen.findByText("dataform CLI not found")).toBeInTheDocument();
+  });
+
+  it("clears stale SQL when a new compile starts", async () => {
+    const bridge = new MockBridge(graph, { compiledSql: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "select:mid" }));
+    act(() => bridge.emit({
+      type: "compiledSqlResult",
+      nodeId: "mid",
+      sections: [{ label: "query", sql: "SELECT 1" }],
+      }));
+    expect(await screen.findByText("SELECT 1")).toBeInTheDocument();
+    act(() => bridge.emit({ type: "compilationStatus", status: "compiling" }));
+    await waitFor(() => expect(screen.queryByText("SELECT 1")).not.toBeInTheDocument());
   });
 });

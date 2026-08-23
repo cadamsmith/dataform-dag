@@ -1,0 +1,40 @@
+config {
+  type: "incremental",
+  schema: "marts",
+  tags: ["marts", "core"],
+  description: "Observation fact table, appended incrementally by observation timestamp.",
+  uniqueKey: ["observation_id"]
+}
+
+/*
+ * pre_operations and post_operations each compile to their own SQL block, and an incremental
+ * table also compiles a SEPARATE incremental variant of the main query. The detail panel should
+ * therefore show several labelled sections for this node, not one.
+ */
+pre_operations {
+  DECLARE watermark DEFAULT (
+    ${when(incremental(),
+      `SELECT COALESCE(MAX(observed_at), TIMESTAMP('2000-01-01')) FROM ${self()}`,
+      `SELECT TIMESTAMP('2000-01-01')`)}
+  )
+}
+
+SELECT
+  o.observation_id,
+  o.session_id,
+  o.object_id,
+  o.observed_at,
+  o.magnitude_estimate,
+  o.eyepiece_mm,
+  q.quality_score,
+  d.visibility_tier
+FROM ${ref("stg_observations")} AS o
+LEFT JOIN ${ref("int_session_quality")} AS q
+  ON q.session_id = o.session_id
+LEFT JOIN ${ref("dim_objects")} AS d
+  ON d.object_id = o.object_id
+${when(incremental(), `WHERE o.observed_at > watermark`)}
+
+post_operations {
+  SELECT COUNT(*) AS rows_loaded FROM ${self()}
+}

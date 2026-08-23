@@ -12,6 +12,7 @@ const graph: SerializedGraph = {
     ["src", ["mid"]],
     ["mid", ["leaf"]],
   ],
+  issues: [],
 };
 
 describe("layoutGraphElk", () => {

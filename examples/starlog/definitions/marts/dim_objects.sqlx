@@ -1,0 +1,29 @@
+config {
+  type: "table",
+  schema: "marts",
+  tags: ["marts", "reference"],
+  description: "Object dimension: one row per catalogued celestial object.",
+  /*
+   * Inline assertions make Dataform GENERATE extra actions from this one file. That is what the
+   * compiled graph exercises: dim_objects.sqlx produces the table AND two assertion nodes, so a
+   * filePath -> node lookup must resolve to the table, not to whichever assertion appears last.
+   */
+  assertions: {
+    uniqueKey: ["object_id"],
+    nonNull: ["object_id", "object_name"]
+  }
+}
+
+SELECT
+  object_id,
+  catalogue,
+  object_name,
+  object_type,
+  constellation,
+  apparent_magnitude,
+  CASE
+    WHEN apparent_magnitude <= 6 THEN 'naked_eye'
+    WHEN apparent_magnitude <= 10 THEN 'binocular'
+    ELSE 'telescope'
+  END AS visibility_tier
+FROM ${ref("stg_objects")}
