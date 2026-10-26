@@ -305,7 +305,7 @@ class GraphController implements vscode.Disposable {
       vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview.css"),
     );
     // React Flow positions nodes with inline `style` attributes, so style-src needs 'unsafe-inline';
-    // scripts are locked to the single nonce'd bundle (elk is inlined into it — see build.mjs).
+    // scripts are locked to the single nonce'd bundle (see build.mjs).
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} https: data:`,

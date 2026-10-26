@@ -49,7 +49,7 @@ describe("collapseAssertions", () => {
 
     const cluster = graph.nodes.find((n) => isClusterId(n.id))!;
     // One edge per parent: the layouts key edges as `${upstream}->${node.id}`, so a duplicated ref
-    // would emit duplicate edge ids into ELK.
+    // would emit duplicate edge ids.
     expect(cluster.refs).toEqual(["a", "b"]);
     expect(cluster.id).toBe(`${CLUSTER_PREFIX}a+b`);
   });

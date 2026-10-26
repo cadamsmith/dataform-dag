@@ -18,10 +18,10 @@ npm run package -w dataform-dag  # build the .vsix
 ## Invariants — do NOT regress these (each was a real fix)
 
 - **The extension webview is ONE non-split IIFE bundle** (`apps/extension/build.mjs`, `splitting`
-  left off). The shared UI lazy-`import()`s elkjs; a separate chunk would NOT carry the webview's
-  CSP nonce and would be blocked → elk never runs → the graph silently falls back to dagre/bezier.
-  Keep it inlined. (elkjs has no `eval`/`new Function`, so the nonce-only `script-src` runs it
-  fine — don't add `'unsafe-eval'` unless a future elk version needs it.)
+  left off). A separate chunk (from any dynamic `import()`) would NOT carry the webview's CSP nonce
+  and would be blocked. Keep everything inlined in the one nonce'd script.
+- **Layout is dagre, synchronous** (`useLayout.ts` → `layoutGraph`). ELK was removed on purpose: it
+  took ~8s on the 1,500-action `transit` example (dagre: ~0.6s) and blocked the webview meanwhile.
 - **`GraphStore` is the only thing that builds a graph in the extension** (`src/graphStore.ts`). It
   owns the project watcher, the debounce, and the compile cache; the webview panel and the
   activity-bar tree are subscribers, so they can never disagree about the graph. The watcher is
@@ -32,15 +32,20 @@ npm run package -w dataform-dag  # build the .vsix
   and recompiles after a quiet period; any compile that finishes under an older generation must
   reach neither the cache nor a view. Failures go to the status pill / tree message, not a toast
   per save — the one toast is a missing CLI, once per session.
-- **Assertion clusters are UI-only, and the pipeline order is filter (tags → focus-mode lineage) →
-  collapse → layout** (`packages/ui/src/collapseAssertions.ts`, `lineage.ts`). A cluster id
-  (`assertions:<parents>`) is synthetic: it names no file and MUST never be sent to a host —
-  `openFile`/`showCompiledSql` always carry a real member node. Collapsing before the tag filter
+- **Assertion clusters and folder groups are UI-only, and the pipeline order is filter (tags →
+  focus-mode lineage) → collapse folders → collapse assertions → layout**
+  (`packages/ui/src/collapseFolders.ts`, `collapseAssertions.ts`, `lineage.ts`). Cluster ids
+  (`assertions:<parents>`) and folder ids (`folder:<path>`) are synthetic: they name no file and
+  MUST never be sent to a host — `openFile`/`showCompiledSql` always carry a real member node.
+  Folder grouping is off in focus mode and under a tag filter: both are narrow views you asked for
+  node by node. Collapsing before the tag filter
   would describe assertions that aren't on screen, and a group with no upstream is never collapsed
   because the filter strips refs to dropped nodes.
-  Clusters are listed in the detail panel and deliberately NOT expanded in place on the canvas. That
-  would need a full ELK relayout on every toggle, which is slow on a big project, and because nodes
-  are locked the canvas would shift under the click.
+  Assertion clusters are listed in the detail panel and deliberately NOT expanded in place on the
+  canvas: there are many small ones, and each toggle would shift the locked canvas under the click.
+  Folders ARE expanded in place (double-click), level by level — the whole point of a folder is to
+  open it, and dagre's relayout is fast enough. A large project (`LARGE_GRAPH` in `App.tsx`) opens
+  on its top-level folders, or on a start screen when it has no folders.
 - **`packages/ui` imports `@dataform-dag/core` for TYPES ONLY** (`import type`). That's what keeps
   core's Node-only modules out of the webview bundle. Don't add a value import from core to the UI.
 - **Node identity = target name** (`target.name` from compile), not filename. One `.sqlx` can
@@ -49,7 +54,7 @@ npm run package -w dataform-dag  # build the .vsix
   `database.schema.name`) for just those nodes (`nodeIdResolver` in `graphSource.ts`). Keying both
   as `orders` merged them into one node with crossed edges. Anything matching a node id back to a
   compiled action (`findCompiledActionByFile`) must accept the qualified forms.
-- **React Flow nodes are locked** (`nodesDraggable={false}`); the ELK layout is authoritative.
+- **React Flow nodes are locked** (`nodesDraggable={false}`); the dagre layout is authoritative.
   Dragging + interactive relayout was built and then deliberately removed (positions aren't
   persisted; relayout produced surprising crossings). Don't re-add it. Controlled RF nodes still
   MUST use `useNodesState`/`useEdgesState` + change handlers or they render frozen (React Flow #002).

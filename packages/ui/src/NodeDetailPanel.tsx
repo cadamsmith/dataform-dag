@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { CompiledSqlSection, DataformNode, NodeType } from "@dataform-dag/core";
 import { NODE_COLORS } from "./graphToFlow.js";
-import { TypeIcon } from "./TypeIcon.js";
+import { TypeIcon, type IconKind } from "./TypeIcon.js";
+import { folderPathOf, isFolderId } from "./collapseFolders.js";
 
 export interface NodeDetailPanelProps {
   node: DataformNode;
@@ -20,6 +21,8 @@ export interface NodeDetailPanelProps {
   onClose?: () => void;
   /** Enter focus mode on this node; absent when it is already the focus. */
   onFocus?: () => void;
+  /** The expanded folder this node is drawn in, to fold it back up; absent when not grouping. */
+  folder?: { path: string; collapse: () => void };
 }
 
 /** Type, tags, description, direct upstream/downstream, and capability-gated file/SQL actions. */
@@ -35,6 +38,7 @@ export function NodeDetailPanel({
   onSelect,
   onClose,
   onFocus,
+  folder,
 }: NodeDetailPanelProps): JSX.Element {
   return (
     <aside className="ddag-detail" style={{ ["--type" as string]: NODE_COLORS[node.type] }}>
@@ -59,6 +63,14 @@ export function NodeDetailPanel({
           {onFocus && <FocusButton onClick={onFocus} />}
         </div>
       )}
+      {folder && (
+        <p className="ddag-detail__file">
+          in {folder.path}/{" "}
+          <button type="button" className="ddag-textbtn" onClick={folder.collapse}>
+            Collapse folder
+          </button>
+        </p>
+      )}
       {compiledSqlError && <p className="ddag-detail__error">{compiledSqlError}</p>}
       {compiledSql && <CompiledSql sections={compiledSql} />}
       <NeighborList title="Depends on" ids={upstream} typeOf={typeOf} onSelect={onSelect} />
@@ -73,7 +85,7 @@ export function DetailHead({
   title,
   onClose,
 }: {
-  type: NodeType;
+  type: IconKind;
   kicker: string;
   title: string;
   onClose?: () => void;
@@ -226,8 +238,10 @@ export function NeighborList({
                   style={type ? { ["--type" as string]: NODE_COLORS[type] } : undefined}
                   onClick={() => onSelect(id)}
                 >
-                  {type && <TypeIcon type={type} />}
-                  <span className="ddag-neighbor__name">{id}</span>
+                  {isFolderId(id) ? <TypeIcon type="folder" /> : type && <TypeIcon type={type} />}
+                  <span className="ddag-neighbor__name">
+                    {isFolderId(id) ? `${folderPathOf(id)}/` : id}
+                  </span>
                 </button>
               </li>
             );

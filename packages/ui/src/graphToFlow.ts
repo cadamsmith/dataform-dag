@@ -11,6 +11,8 @@ export interface UiNode extends DataformNode {
   label?: string;
   /** How many real nodes this one stands for; absent for an ordinary node. */
   count?: number;
+  /** A collapsed folder from `collapseFolders`, drawn as a folder rather than as its `type`. */
+  folder?: boolean;
 }
 
 /** A SerializedGraph whose nodes may carry those extras. */
@@ -33,23 +35,20 @@ export const NODE_COLORS: Record<NodeType, string> = {
   operations: "var(--ddag-type-operations, #a77bf3)",
 };
 
+/** A folder isn't a type, so it stays neutral and never competes with the type colors. */
+export const FOLDER_COLOR = "var(--ddag-muted)";
+
 export interface FlowNode {
   id: string;
   position: { x: number; y: number };
-  data: { label: string; nodeType: NodeType; color: string; count?: number };
+  data: { label: string; nodeType: NodeType; color: string; count?: number; folder?: boolean };
   width: number;
   height: number;
-}
-export interface Point {
-  x: number;
-  y: number;
 }
 export interface FlowEdge {
   id: string;
   source: string;
   target: string;
-  /** Routed polyline (start → bends → end) when a router (ELK) produced one; else undefined. */
-  points?: Point[];
 }
 export interface FlowGraph {
   nodes: FlowNode[];
@@ -111,8 +110,9 @@ export function layoutGraph(graph: UiGraph): FlowGraph {
       data: {
         label: labelOf(node),
         nodeType: node.type,
-        color: NODE_COLORS[node.type],
+        color: node.folder ? FOLDER_COLOR : NODE_COLORS[node.type],
         count: node.count,
+        folder: node.folder,
       },
       width,
       height: NODE_H,

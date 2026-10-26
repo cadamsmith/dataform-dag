@@ -19,11 +19,11 @@ const extension = {
 };
 
 /**
- * The webview UI: ONE self-contained iife bundle. `splitting` stays off (the esbuild default), so the
- * lazy `import("elkjs")` in the shared UI is inlined into this single script instead of becoming a
+ * The webview UI: ONE self-contained iife bundle. `splitting` stays off (the esbuild default), so any
+ * dynamic `import()` in the shared UI is inlined into this single script instead of becoming a
  * separate chunk. That matters: a webview loads its script under a CSP nonce, and a separately-emitted
- * chunk would not carry that nonce and would be blocked — the graph would silently never lay out.
- * Inlining keeps everything in the one nonce'd file. CSS imports (app.css + @xyflow styles) are
+ * chunk would not carry that nonce and would be blocked. Inlining keeps everything in the one
+ * nonce'd file. CSS imports (app.css + @xyflow styles) are
  * collected into a sibling dist/webview.css that the extension links.
  */
 const webview = {

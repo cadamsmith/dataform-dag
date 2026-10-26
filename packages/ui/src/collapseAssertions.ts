@@ -59,8 +59,8 @@ export function collapseAssertions(graph: UiGraph, minGroupSize = 2): CollapsedG
   }
   if (members.size === 0) return { graph, members, clusterOf };
 
-  // Rebuild in the original node order, with each cluster taking the slot of its first member: ELK's
-  // considerModelOrder strategy reads this order, so preserving it keeps the layout recognizable.
+  // Rebuild in the original node order, with each cluster taking the slot of its first member: dagre
+  // breaks ties by insertion order, so preserving it keeps the layout recognizable.
   const emitted = new Set<string>();
   const nodes: UiNode[] = [];
   for (const node of graph.nodes) {

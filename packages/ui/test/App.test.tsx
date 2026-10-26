@@ -685,3 +685,79 @@ describe("App on a large project", () => {
     expect(screen.getByText(wideCount)).toBeInTheDocument();
   });
 });
+
+/** Over the threshold, in folders: `core/hub` feeds `agencies/<n>/model_<n>`, plus a root file. */
+const foldered: SerializedGraph = (() => {
+  const agencies = Array.from({ length: LARGE_GRAPH }, (_, i) => i);
+  return {
+    nodes: [
+      { id: "hub", filePath: "defs/core/hub.sqlx", type: "table", tags: [], refs: [] },
+      { id: "top", filePath: "defs/top.sqlx", type: "view", tags: [], refs: ["hub"] },
+      ...agencies.map((i) => ({
+        id: `model_${i}`,
+        filePath: `defs/agencies/a${i}/model_${i}.sqlx`,
+        type: "table" as const,
+        tags: [],
+        refs: ["hub"],
+      })),
+    ],
+    downstream: [["hub", ["top", ...agencies.map((i) => `model_${i}`)]]],
+    issues: [],
+  };
+})();
+const folderedCount = (LARGE_GRAPH + 2).toLocaleString();
+
+describe("App, grouped by folder", () => {
+  it("opens a large project on its top-level folders", async () => {
+    render(<App bridge={new MockBridge(foldered)} />);
+    // core/, agencies/, and the root file.
+    expect(await screen.findByText(`3 of ${folderedCount} nodes`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "focus:folder:agencies" })).toBeInTheDocument();
+    expect(screen.queryByText(/pick a place to start/)).toBeNull();
+  });
+
+  it("expands a folder on double-click, and collapses it back from the panel", async () => {
+    render(<App bridge={new MockBridge(foldered)} />);
+    await userEvent.click(await screen.findByRole("button", { name: "focus:folder:agencies" }));
+    // One folder per agency now, instead of agencies/.
+    await userEvent.click(await screen.findByRole("button", { name: "select:folder:agencies/a3" }));
+    expect(screen.queryByRole("button", { name: "select:folder:agencies" })).toBeNull();
+    const panel = screen.getByRole("complementary");
+    await userEvent.click(within(panel).getByRole("button", { name: "Collapse agencies/" }));
+    expect(await screen.findByText(`3 of ${folderedCount} nodes`)).toBeInTheDocument();
+  });
+
+  it("opens the folders above a searched node", async () => {
+    render(<App bridge={new MockBridge(foldered)} />);
+    await screen.findByText(`3 of ${folderedCount} nodes`);
+    await userEvent.type(screen.getByRole("combobox", { name: "Find a node" }), "model_7{Enter}");
+    expect(await screen.findByRole("button", { name: "select:model_7" })).toBeInTheDocument();
+    const panel = screen.getByRole("complementary");
+    expect(within(panel).getByRole("heading", { name: "model_7" })).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole("button", { name: "Collapse folder" }));
+    expect(screen.queryByRole("button", { name: "select:model_7" })).toBeNull();
+  });
+
+  it("still starts from the opened file's lineage, ungrouped", async () => {
+    const bridge = new MockBridge(foldered);
+    render(<App bridge={bridge} />);
+    await screen.findByText(`3 of ${folderedCount} nodes`);
+    act(() => bridge.emit({ type: "startFrom", nodeId: "model_4" }));
+    expect(await screen.findByRole("button", { name: "select:model_4" })).toBeInTheDocument();
+    expect(screen.getByText(`2 of ${folderedCount} nodes`)).toBeInTheDocument();
+  });
+
+  it("never sends a folder id to the host", async () => {
+    const bridge = new MockBridge(foldered, { openFile: true, compiledSql: true });
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "select:folder:core" }));
+    expect(within(screen.getByRole("complementary")).queryByRole("button", { name: "Go to file" })).toBeNull();
+    expect(bridge.sent.filter((m) => "nodeId" in m && String(m.nodeId).startsWith("folder:"))).toEqual([]);
+  });
+
+  it("shows every node when grouping is turned off", async () => {
+    render(<App bridge={new MockBridge(foldered)} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Group by folder" }));
+    expect(await screen.findByText(`${folderedCount} nodes`)).toBeInTheDocument();
+  });
+});

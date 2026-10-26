@@ -6,6 +6,15 @@ import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf } from "./graphToFlow
 import { filterGraphWithContext, restrictGraph, tagCounts } from "./filterGraph.js";
 import { depthWithin, lineageOf } from "./lineage.js";
 import { collapseAssertions, isClusterId, type CollapsedGraph } from "./collapseAssertions.js";
+import {
+  ancestorsOf,
+  collapseFolders,
+  folderId,
+  folderPathOf,
+  folderTree,
+  isFolderId,
+} from "./collapseFolders.js";
+import { FolderDetailPanel } from "./FolderDetailPanel.js";
 import { useLayout } from "./useLayout.js";
 import { DagGraph } from "./DagGraph.js";
 import { GraphDiagnostics } from "./GraphDiagnostics.js";
@@ -18,8 +27,9 @@ import { TypeIcon } from "./TypeIcon.js";
 import "./app.css";
 
 /**
- * Above this many nodes the panel opens on a start screen rather than laying out the whole project,
- * and focus mode limits its depth so the lineage it draws stays about this size.
+ * Above this many nodes the panel opens on its folders collapsed (or, for a project with no folders,
+ * on a start screen) rather than drawing every node, and focus mode limits its depth so the lineage
+ * it draws stays about this size.
  */
 export const LARGE_GRAPH = 300;
 
@@ -57,6 +67,10 @@ export function App({ bridge }: AppProps): JSX.Element {
   const [lineageDepth, setLineageDepth] = useState<number | null>(null);
   /** The user asked for the whole of a large project anyway. */
   const [showAll, setShowAll] = useState(false);
+  /** Group by folder, once the user has said; until then it's on for a large project. */
+  const [folderChoice, setFolderChoice] = useState<boolean | null>(null);
+  /** Folder paths opened up on the canvas; any folder not in here is drawn as one node. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_FOLDERS);
   const { capabilities } = bridge;
 
   // The host owns persistence, not the filter itself: it sends `tagFilterState` once on restore and
@@ -67,6 +81,9 @@ export function App({ bridge }: AppProps): JSX.Element {
   }, [savedTagFilter]);
 
   const tags = useMemo(() => (graph ? tagCounts(graph) : NO_TAGS), [graph]);
+  const tree = useMemo(() => (graph ? folderTree(graph.nodes) : null), [graph]);
+  const isLarge = !!graph && graph.nodes.length > LARGE_GRAPH;
+  const groupFolders = (folderChoice ?? isLarge) && !!tree?.hasFolders;
   const tagFiltered = useMemo(
     () => (graph ? filterGraphWithContext(graph, selectedTags, showContext) : null),
     [graph, selectedTags, showContext],
@@ -87,21 +104,31 @@ export function App({ bridge }: AppProps): JSX.Element {
   useEffect(() => {
     if (lineage && visibleGraph && !focused) setLineage(null);
   }, [lineage, visibleGraph, focused]);
-  // A large project with nothing chosen yet draws nothing: no layout runs until the user picks a
-  // node, a tag, or "show all". Every way out of focus mode lands back here too.
+  // A large project with no folders to group and nothing chosen yet draws nothing: no layout runs
+  // until the user picks a node, a tag, or "show all". Every way out of focus mode lands back here.
   const atStart =
-    !!graph && graph.nodes.length > LARGE_GRAPH && !showAll && !focused && selectedTags.length === 0;
+    isLarge && !showAll && !focused && selectedTags.length === 0 && !groupFolders;
   const shownGraph = atStart ? null : (focused?.graph ?? visibleGraph);
-  // filter (tags → lineage) → collapse → layout. Collapsing after the filters is what keeps a
-  // cluster describing only the assertions still on screen. It runs even when grouping is off — it
-  // is O(nodes), and its result is what tells us whether there is anything to group at all.
+  // filter (tags → lineage) → collapse folders → collapse assertions → layout. Collapsing after the
+  // filters is what keeps a group describing only what is still on screen. Neither a tag filter nor
+  // focus mode is folder-grouped: each is already a narrow view you asked for, node by node (and the
+  // tag filter's context marking only knows real nodes).
+  const foldering = groupFolders && !focused && selectedTags.length === 0;
+  const folders = useMemo(
+    () => (shownGraph && tree && foldering ? collapseFolders(shownGraph, tree, expanded) : null),
+    [shownGraph, tree, foldering, expanded],
+  );
+  const folderedGraph = folders?.graph ?? shownGraph;
+  // Assertion grouping runs even when it is off — it is O(nodes), and its result is what tells us
+  // whether there is anything to group at all.
   const grouping: CollapsedGraph | null = useMemo(
-    () => (shownGraph ? collapseAssertions(shownGraph) : null),
-    [shownGraph],
+    () => (folderedGraph ? collapseAssertions(folderedGraph) : null),
+    [folderedGraph],
   );
   const ungrouped: CollapsedGraph | null = useMemo(
-    () => (shownGraph ? { graph: shownGraph, members: NO_MEMBERS, clusterOf: NO_CLUSTERS } : null),
-    [shownGraph],
+    () =>
+      folderedGraph ? { graph: folderedGraph, members: NO_MEMBERS, clusterOf: NO_CLUSTERS } : null,
+    [folderedGraph],
   );
   const collapsed = groupAssertions ? grouping : ungrouped;
   const flow = useLayout(collapsed?.graph ?? null);
@@ -118,11 +145,42 @@ export function App({ bridge }: AppProps): JSX.Element {
       setSelection(null);
       return;
     }
+    // Asking for a node inside a collapsed folder opens the folders above it. If it then lands in an
+    // assertion cluster, the effect below moves the selection onto that cluster.
+    if (folders?.folderOf.has(nodeId)) {
+      reveal(nodeId);
+      setSelection({ canvasId: nodeId, memberId: null });
+      return;
+    }
     const clusterId = collapsed?.clusterOf.get(nodeId);
     setSelection(
       clusterId ? { canvasId: clusterId, memberId: nodeId } : { canvasId: nodeId, memberId: null },
     );
   };
+
+  useEffect(() => {
+    const clusterId = selection && collapsed?.clusterOf.get(selection.canvasId);
+    if (clusterId) setSelection({ canvasId: clusterId, memberId: selection!.canvasId });
+  }, [selection, collapsed]);
+
+  /** Expand every folder above a node, so it is drawn itself. */
+  const reveal = (nodeId: string): void => {
+    const path = tree?.folderOfNode.get(nodeId);
+    if (!path) return;
+    setExpanded((prev) => new Set([...prev, ...ancestorsOf(path)]));
+  };
+  const expandFolder = (id: string): void => {
+    setExpanded((prev) => new Set([...prev, folderPathOf(id)]));
+    setSelection(null);
+  };
+  /** Fold a folder (and everything opened inside it) back into one node, and select that node. */
+  const collapseFolder = (path: string): void => {
+    setExpanded((prev) => new Set([...prev].filter((p) => p !== path && !p.startsWith(`${path}/`))));
+    setSelection({ canvasId: folderId(path), memberId: null });
+  };
+  /** The innermost expanded folder at or above `path`: the one a "collapse" folds up. */
+  const expandedAbove = (path: string): string | null =>
+    ancestorsOf(path).filter((p) => expanded.has(p)).pop() ?? null;
 
   // A host focus request (active editor, tree reveal) pans the canvas. When its target is collapsed,
   // also select the cluster: panning to a node that doesn't name what you asked for is meaningless
@@ -151,9 +209,11 @@ export function App({ bridge }: AppProps): JSX.Element {
 
   const focus = useMemo(() => {
     if (!jump) return null;
-    const clusterId = collapsed?.clusterOf.get(jump.nodeId);
-    return clusterId ? { nodeId: clusterId, nonce: jump.nonce } : jump;
-  }, [jump, collapsed]);
+    // A node inside a collapsed folder pans to the folder; search reveals it first, the host doesn't.
+    const canvasId =
+      folders?.folderOf.get(jump.nodeId) ?? collapsed?.clusterOf.get(jump.nodeId) ?? jump.nodeId;
+    return canvasId === jump.nodeId ? jump : { nodeId: canvasId, nonce: jump.nonce };
+  }, [jump, folders, collapsed]);
 
   /** Search picks a node to look at: select it AND bring it into view. */
   const selectAndJump = (nodeId: string): void => {
@@ -172,6 +232,11 @@ export function App({ bridge }: AppProps): JSX.Element {
    * own id stays valid after the graph narrows; a cluster keeps its id because its parents stay.
    */
   const focusOn = (canvasId: string): void => {
+    // A folder's lineage would be most of the project; double-clicking one opens it instead.
+    if (isFolderId(canvasId)) {
+      expandFolder(canvasId);
+      return;
+    }
     const members = collapsed?.members.get(canvasId);
     enterFocus(members ? members.map((m) => m.id) : [canvasId], canvasId);
   };
@@ -195,9 +260,9 @@ export function App({ bridge }: AppProps): JSX.Element {
   useEffect(() => {
     if (!startRequest || startRequest.nonce === handledStart.current) return;
     handledStart.current = startRequest.nonce;
-    if (atStart) enterFocus([startRequest.nodeId], startRequest.nodeId);
+    if (isLarge && !lineage) enterFocus([startRequest.nodeId], startRequest.nodeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startRequest, atStart]);
+  }, [startRequest, isLarge]);
 
   // Escape leaves focus mode. On `window`, so it runs after the popovers' document listeners: an
   // Escape that closed a menu arrives here already `defaultPrevented` and is ignored.
@@ -230,6 +295,13 @@ export function App({ bridge }: AppProps): JSX.Element {
     !!lineage && lineage.length === ids.length && ids.every((id) => lineage.includes(id));
 
   const clusterMembers = selection ? (collapsed?.members.get(selection.canvasId) ?? null) : null;
+  const folderMembers = selection ? (folders?.members.get(selection.canvasId) ?? null) : null;
+  const folderNeighbors = useMemo(() => {
+    if (!folderMembers || !folders || !selection) return null;
+    const node = folders.graph.nodes.find((n) => n.id === selection.canvasId);
+    const downstream = new Map(folders.graph.downstream).get(selection.canvasId) ?? [];
+    return { upstream: node?.refs ?? [], downstream };
+  }, [folderMembers, folders, selection]);
   const selected: DataformNode | null =
     (!clusterMembers && index && selection && index.byId.get(selection.canvasId)) || null;
   /**
@@ -285,6 +357,35 @@ export function App({ bridge }: AppProps): JSX.Element {
         <div className="ddag-topbar__tools">
           {graph && <NodeSearch nodes={graph.nodes} onSelect={selectAndJump} />}
           <TagFilter tagCounts={tags} selectedTags={selectedTags} onChange={changeTags} />
+          {tree?.hasFolders && !focused && selectedTags.length === 0 && (
+            <button
+              type="button"
+              className={`ddag-tool ddag-switch${groupFolders ? " is-on" : ""}`}
+              aria-pressed={groupFolders}
+              onClick={() => {
+                // Turning grouping off on a large project is asking to see all of it.
+                if (groupFolders && isLarge) setShowAll(true);
+                setFolderChoice(!groupFolders);
+                setSelection(null);
+              }}
+              title="Draw each folder as one node; double-click a folder to open it"
+            >
+              <span className="ddag-switch__track" aria-hidden="true" />
+              Group by folder
+            </button>
+          )}
+          {foldering && expanded.size > 0 && (
+            <button
+              type="button"
+              className="ddag-tool"
+              onClick={() => {
+                setExpanded(NO_FOLDERS);
+                setSelection(null);
+              }}
+            >
+              Collapse all
+            </button>
+          )}
           {(canGroup || !groupAssertions) && (
             <button
               type="button"
@@ -360,19 +461,31 @@ export function App({ bridge }: AppProps): JSX.Element {
               onFocusNode={focusOn}
               rootIds={rootIds}
               contextIds={contextIds}
-              fitKey={`${selectedTags.join("\u0000")}|${showContext}|${groupAssertions}|${
+              fitKey={`${selectedTags.join("\u0000")}|${showContext}|${groupAssertions}|${groupFolders}|${
                 focused ? lineage!.join("\u0000") : ""
               }|${lineageDepth}`}
             />
           ) : (
-            <EmptyState
-              status={compilationStatus}
-              message={compilationMessage}
-              laying={shownGraph?.nodes.length ?? null}
-            />
+            <EmptyState status={compilationStatus} message={compilationMessage} />
           )}
         </main>
         {/* Leaving focus keeps the selection, but on the start screen nothing it names is drawn. */}
+        {!atStart && folderMembers && selection && (
+          <FolderDetailPanel
+            path={folderPathOf(selection.canvasId)}
+            members={folderMembers}
+            upstream={folderNeighbors?.upstream ?? []}
+            downstream={folderNeighbors?.downstream ?? []}
+            typeOf={typeOf}
+            onSelect={select}
+            onExpand={() => expandFolder(selection.canvasId)}
+            onCollapseParent={(() => {
+              const parent = expandedAbove(folderPathOf(selection.canvasId));
+              return parent ? { path: parent, collapse: () => collapseFolder(parent) } : undefined;
+            })()}
+            onClose={() => select(null)}
+          />
+        )}
         {!atStart && clusterMembers && index && selection && (
           <ClusterDetailPanel
             members={clusterMembers}
@@ -402,6 +515,10 @@ export function App({ bridge }: AppProps): JSX.Element {
             onSelect={select}
             onClose={() => select(null)}
             onFocus={isFocusRoot([selected.id]) ? undefined : () => focusOn(selected.id)}
+            folder={(() => {
+              const path = folders && expandedAbove(tree?.folderOfNode.get(selected.id) ?? "");
+              return path ? { path, collapse: () => collapseFolder(path) } : undefined;
+            })()}
             onOpenFile={openFile}
             onShowCompiledSql={showCompiledSql}
             // Gate on nodeId so SQL fetched for a previous selection never renders under this one.
@@ -421,6 +538,7 @@ const NO_MEMBERS: CollapsedGraph["members"] = new Map();
 const NO_CLUSTERS: CollapsedGraph["clusterOf"] = new Map();
 const NO_TAGS = new Map<string, number>();
 const NO_IDS: string[] = [];
+const NO_FOLDERS: ReadonlySet<string> = new Set();
 const NO_CONTEXT: ReadonlySet<string> = new Set();
 
 const STATUS_LABEL: Record<CompilationStatus, string> = {
@@ -491,27 +609,14 @@ function StartScreen({
   );
 }
 
-/** What the canvas shows before the first successful compile, or while a layout is computing. */
+/** What the canvas shows before the first successful compile. */
 function EmptyState({
   status,
   message,
-  laying,
 }: {
   status: CompilationStatus;
   message: string | null;
-  /** Node count of a graph that is being laid out, or null when there is no graph yet. */
-  laying: number | null;
 }): JSX.Element {
-  if (laying !== null) {
-    return (
-      <div className="ddag-empty">
-        <div className="ddag-empty__box ddag-empty__box--quiet">
-          <span className="ddag-empty__pulse" aria-hidden="true" />
-          Laying out {laying.toLocaleString()} nodes…
-        </div>
-      </div>
-    );
-  }
   if (status === "cli-missing") {
     return (
       <div className="ddag-empty">

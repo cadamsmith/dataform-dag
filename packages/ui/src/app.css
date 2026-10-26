@@ -872,6 +872,11 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .ddag-app {
   opacity: 0.4;
 }
 
+/* A collapsed folder: dashed, so it never reads as a model. Double-click expands it. */
+.ddag-node.is-folder {
+  border-style: dashed;
+}
+
 /* --- Empty / error states --------------------------------------------------------------------- */
 
 .ddag-empty {

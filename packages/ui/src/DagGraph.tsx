@@ -21,7 +21,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { NodeType } from "@dataform-dag/core";
-import type { FlowGraph, FlowNode, Point } from "./graphToFlow.js";
+import type { FlowGraph, FlowNode } from "./graphToFlow.js";
 import { TypeIcon } from "./TypeIcon.js";
 
 export interface DagGraphProps {
@@ -56,6 +56,8 @@ export type ModelNodeData = {
   context: boolean;
   /** Set when this node stands for several collapsed ones — see `collapseAssertions`. */
   count?: number;
+  /** A collapsed folder — see `collapseFolders`. */
+  folder?: boolean;
 };
 type ModelNode = Node<ModelNodeData, "model">;
 
@@ -65,22 +67,30 @@ type ModelNode = Node<ModelNodeData, "model">;
  */
 const ModelNode = memo(function ModelNode({ data }: NodeProps<ModelNode>) {
   const cls = `ddag-node${data.selected ? " is-selected" : ""}${data.dimmed ? " is-dimmed" : ""}${
-    data.count ? " is-cluster" : ""
+    data.folder ? " is-folder" : data.count ? " is-cluster" : ""
   }${data.root ? " is-root" : ""}${data.context ? " is-context" : ""}`;
   return (
     <div
       className={cls}
       style={{ ["--type" as string]: data.color }}
-      title={data.context ? "Not tagged with the filter: shown as a neighbor of a match" : undefined}
+      title={
+        data.folder
+          ? "Double-click to expand"
+          : data.context
+            ? "Not tagged with the filter: shown as a neighbor of a match"
+            : undefined
+      }
     >
       <Handle type="target" position={Position.Left} className="ddag-node__port" />
       <span className="ddag-node__tab">
-        <TypeIcon type={data.nodeType} />
+        <TypeIcon type={data.folder ? "folder" : data.nodeType} />
       </span>
       <span className="ddag-node__text">
         <span className="ddag-node__label">{data.label}</span>
         {/* A cluster's own label already names the type, so the sub-label says what it IS instead. */}
-        <span className="ddag-node__type">{data.count ? "grouped" : data.nodeType}</span>
+        <span className="ddag-node__type">
+          {data.folder ? `${data.count!.toLocaleString()} nodes` : data.count ? "grouped" : data.nodeType}
+        </span>
       </span>
       <Handle type="source" position={Position.Right} className="ddag-node__port" />
     </div>
@@ -89,52 +99,16 @@ const ModelNode = memo(function ModelNode({ data }: NodeProps<ModelNode>) {
 
 const nodeTypes = { model: ModelNode };
 
-/** Rounded-corner SVG path through ELK's routed points; short segments keep tight corners intact. */
-function roundedPath(points: Point[], radius = 8): string {
-  if (points.length < 2) return "";
-  const first = points[0]!;
-  const parts = [`M ${first.x},${first.y}`];
-  for (let i = 1; i < points.length - 1; i++) {
-    const p0 = points[i - 1]!;
-    const p1 = points[i]!;
-    const p2 = points[i + 1]!;
-    const r = Math.min(radius, dist(p0, p1) / 2, dist(p1, p2) / 2);
-    const a = along(p1, p0, r);
-    const b = along(p1, p2, r);
-    parts.push(`L ${a.x},${a.y}`, `Q ${p1.x},${p1.y} ${b.x},${b.y}`);
-  }
-  const last = points[points.length - 1]!;
-  parts.push(`L ${last.x},${last.y}`);
-  return parts.join(" ");
-}
-function dist(a: Point, b: Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
-function along(from: Point, to: Point, d: number): Point {
-  const len = dist(from, to) || 1;
-  return { x: from.x + ((to.x - from.x) / len) * d, y: from.y + ((to.y - from.y) / len) * d };
-}
-
-/**
- * Edge that draws ELK's routed orthogonal polyline. Nodes are locked, so the routed points always
- * match the live endpoints; the bezier branch only covers the dagre fallback layout, which produces
- * no routed points.
- */
-const ElkEdge = memo(function ElkEdge(props: EdgeProps) {
-  const points = (props.data as { points?: Point[] } | undefined)?.points;
-  let path: string;
-  if (points && points.length >= 2) {
-    path = roundedPath(points);
-  } else {
-    [path] = getBezierPath({
-      sourceX: props.sourceX,
-      sourceY: props.sourceY,
-      sourcePosition: props.sourcePosition,
-      targetX: props.targetX,
-      targetY: props.targetY,
-      targetPosition: props.targetPosition,
-    });
-  }
+/** A bezier edge between the two ports. Nodes are locked, so the endpoints are the layout's. */
+const DagEdge = memo(function DagEdge(props: EdgeProps) {
+  const [path] = getBezierPath({
+    sourceX: props.sourceX,
+    sourceY: props.sourceY,
+    sourcePosition: props.sourcePosition,
+    targetX: props.targetX,
+    targetY: props.targetY,
+    targetPosition: props.targetPosition,
+  });
   // Arrowheads come from the <defs> in EdgeMarkers rather than React Flow's markers: those are keyed
   // by color string, and these colors are CSS variables that follow the editor theme.
   const active = (props.data as { active?: boolean } | undefined)?.active;
@@ -148,7 +122,7 @@ const ElkEdge = memo(function ElkEdge(props: EdgeProps) {
   );
 });
 
-const edgeTypes = { elk: ElkEdge };
+const edgeTypes = { dag: DagEdge };
 
 function EdgeMarkers(): JSX.Element {
   return (
@@ -239,6 +213,7 @@ function DagCanvas({
           color: n.data.color,
           nodeType: n.data.nodeType,
           count: n.data.count,
+          folder: n.data.folder,
           selected: false,
           dimmed: false,
           root: false,
@@ -251,8 +226,7 @@ function DagCanvas({
         id: e.id,
         source: e.source,
         target: e.target,
-        type: "elk",
-        data: { points: e.points },
+        type: "dag",
       })),
     );
 
@@ -292,8 +266,7 @@ function DagCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, setNodes, setEdges]);
   // Re-derive emphasis (selection ring, dimming, focus root, context) without disturbing positions.
-  // `graph` is a dependency too: the build effect above resets every flag when a layout lands, and
-  // layouts land asynchronously, AFTER the render that changed the selection/root/context sets —
+  // `graph` is a dependency too: the build effect above resets every flag when a new layout lands —
   // without it, emphasis applied to the old nodes would be wiped and never reapplied.
   // Only nodes/edges whose flags change get a new object, so a hover re-renders a handful of
   // elements rather than the whole project.

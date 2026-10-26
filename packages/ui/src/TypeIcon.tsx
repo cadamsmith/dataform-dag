@@ -5,7 +5,11 @@ import type { NodeType } from "@dataform-dag/core";
  * tree uses for the same types (database, table, eye, diff-added, check, gear), so a type looks the
  * same in the sidebar and on the canvas.
  */
-const GLYPHS: Record<NodeType, JSX.Element> = {
+/** A node type, or a collapsed folder (which draws like one but isn't a type). */
+export type IconKind = NodeType | "folder";
+
+const GLYPHS: Record<IconKind, JSX.Element> = {
+  folder: <path d="M1.75 4.25c0-.55.45-1 1-1h3.4l1.5 1.5h5.6c.55 0 1 .45 1 1v6.5c0 .55-.45 1-1 1H2.75c-.55 0-1-.45-1-1z" />,
   source: (
     <>
       <ellipse cx="8" cy="4" rx="5" ry="2" />
@@ -44,7 +48,7 @@ const GLYPHS: Record<NodeType, JSX.Element> = {
   ),
 };
 
-export function TypeIcon({ type, className }: { type: NodeType; className?: string }): JSX.Element {
+export function TypeIcon({ type, className }: { type: IconKind; className?: string }): JSX.Element {
   return (
     <svg
       className={className ?? "ddag-typeicon"}
