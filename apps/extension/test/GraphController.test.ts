@@ -3,6 +3,7 @@ import { activate } from "../src/extension.js";
 import {
   Uri,
   ViewColumn,
+  changeConfig,
   commands,
   lastActiveEditorHandler,
   lastPanel,
@@ -18,10 +19,12 @@ import {
 // The controller's build path goes through core; mock it so these tests exercise the controller's
 // orchestration (routing / watcher wiring / focus mapping / error handling), not core itself.
 vi.mock("@dataform-dag/core", () => ({
-  NodeFileSource: class {
-    constructor(public readonly root: string) {}
+  DataformCliNotFoundError: class extends Error {
+    constructor(readonly command: string) {
+      super(`Dataform CLI not found: ${command}`);
+    }
   },
-  buildGraphFromWorkspace: vi.fn(),
+  resolveDataformCli: vi.fn((_root: string, configured?: string) => configured || "dataform"),
   serializeGraph: vi.fn(),
   compileDataformProject: vi.fn(),
   graphFromCompileOutput: vi.fn(),
@@ -29,15 +32,15 @@ vi.mock("@dataform-dag/core", () => ({
   compiledSqlSections: vi.fn(),
 }));
 import {
-  buildGraphFromWorkspace,
+  DataformCliNotFoundError,
   compileDataformProject,
   compiledSqlSections,
   findCompiledActionByFile,
   graphFromCompileOutput,
   serializeGraph,
 } from "@dataform-dag/core";
+import { RECOMPILE_DEBOUNCE_MS } from "../src/graphStore.js";
 
-const buildMock = buildGraphFromWorkspace as unknown as Mock;
 const serializeMock = serializeGraph as unknown as Mock;
 const compileMock = compileDataformProject as unknown as Mock;
 const fromCompileMock = graphFromCompileOutput as unknown as Mock;
@@ -52,6 +55,7 @@ const SERIALIZED = {
   ],
   edges: [],
 };
+const OUTPUT = { tables: [] };
 
 function fakeContext() {
   return {
@@ -82,14 +86,24 @@ function activateAndShow() {
   return context;
 }
 
+/** Activate with no view open, and wait for the eager compile to land. */
+async function activateAndSettle() {
+  const context = fakeContext();
+  activate(context as never);
+  await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(1));
+  await flush();
+  return context;
+}
+
 beforeEach(() => {
+  vi.useRealTimers();
   resetMock();
-  buildMock.mockReset();
   serializeMock.mockReset();
-  buildMock.mockResolvedValue({ nodes: new Map(), edges: [] });
   serializeMock.mockReturnValue(SERIALIZED);
   compileMock.mockReset();
+  compileMock.mockResolvedValue(OUTPUT);
   fromCompileMock.mockReset();
+  fromCompileMock.mockReturnValue({ nodes: new Map(), downstreamMap: new Map(), issues: [] });
   findActionMock.mockReset();
   sectionsMock.mockReset();
   workspace.workspaceFolders = [{ uri: { fsPath: "/proj" } }];
@@ -109,8 +123,22 @@ describe("activate", () => {
   it("registers the activity-bar tree view and disposes everything it owns", () => {
     const context = activateAndShow();
     expect(lastTreeView().id).toBe("dataformDag.nodes");
-    // 4 commands + the tree view + the tree provider + the controller + the store
-    expect(context.subscriptions).toHaveLength(8);
+    // 4 commands + the tree view + its status subscription + the tree provider + the controller +
+    // the store
+    expect(context.subscriptions).toHaveLength(9);
+  });
+
+  it("compiles eagerly, before any view is opened", async () => {
+    await activateAndSettle();
+    expect(compileMock).toHaveBeenCalledWith("/proj", "dataform");
+    expect(window.createWebviewPanel).not.toHaveBeenCalled();
+  });
+
+  it("does not compile at activation when no folder is open", async () => {
+    workspace.workspaceFolders = undefined;
+    activate(fakeContext() as never);
+    await flush();
+    expect(compileMock).not.toHaveBeenCalled();
   });
 });
 
@@ -152,13 +180,23 @@ describe("message routing", () => {
     );
   });
 
-  it("rebuilds on 'requestRefresh'", async () => {
+  it("republishes on 'requestRefresh' without recompiling a current cache", async () => {
     activateAndShow();
+    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
     lastPanel().webview.emitMessage({ type: "requestRefresh" });
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
-    expect(lastPanel().webview.postMessage).toHaveBeenCalledWith({
-      type: "graphUpdate",
-      graph: SERIALIZED,
+    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(2));
+    expect(compileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands a late-opening panel the graph and status the store already has", async () => {
+    const context = await activateAndSettle();
+    void context;
+    records.commands.get("dataformDag.showGraph")!();
+    lastPanel().webview.emitMessage({ type: "ready" });
+    expect(postedOfType("graphUpdate")[0]).toEqual({ type: "graphUpdate", graph: SERIALIZED });
+    expect(postedOfType("compilationStatus")[0]).toEqual({
+      type: "compilationStatus",
+      status: "ready",
     });
   });
 
@@ -179,38 +217,160 @@ describe("buildAndPost", () => {
     lastPanel().webview.emitMessage({ type: "ready" });
     await vi.waitFor(() => expect(records.warnings).toHaveLength(1));
     expect(records.warnings[0]).toMatch(/open a folder/i);
-    expect(buildMock).not.toHaveBeenCalled();
-    // `ready` still replies with the restored filter and mode; only the graph is withheld.
+    expect(compileMock).not.toHaveBeenCalled();
+    // `ready` still replies with the restored filter and status; only the graph is withheld.
     expect(postedOfType("graphUpdate")).toHaveLength(0);
   });
 
-  it("surfaces a build failure as an error message without crashing", async () => {
-    buildMock.mockRejectedValueOnce(new Error("boom"));
+  it("reports a first-compile failure as status, not a toast, and posts no graph", async () => {
+    compileMock.mockRejectedValue(new Error("definitions/a.sqlx: boom"));
     activateAndShow();
     lastPanel().webview.emitMessage({ type: "ready" });
-    await vi.waitFor(() => expect(records.errors).toHaveLength(1));
-    expect(records.errors[0]).toMatch(/boom/);
+    await vi.waitFor(() =>
+      expect(postedOfType("compilationStatus").at(-1)).toEqual({
+        type: "compilationStatus",
+        status: "error",
+        message: "definitions/a.sqlx: boom",
+      }),
+    );
+    expect(records.errors).toHaveLength(0);
     expect(postedOfType("graphUpdate")).toHaveLength(0);
+    expect(records.executed).toContainEqual(["setContext", "dataformDag.compileFailed", true]);
   });
 
-  it("builds from the first workspace folder's path", async () => {
+  it("strips the CLI's ANSI colours from a failure message", async () => {
+    compileMock.mockRejectedValue(new Error("\x1b[91mnot a dataform directory\x1b[0m"));
     activateAndShow();
     lastPanel().webview.emitMessage({ type: "ready" });
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
-    expect(buildMock.mock.calls[0][0]).toMatchObject({ root: "/proj" });
+    await vi.waitFor(() =>
+      expect(postedOfType("compilationStatus").at(-1)).toMatchObject({
+        message: "not a dataform directory",
+      }),
+    );
+  });
+
+  it("compiles the first workspace folder with the resolved CLI", async () => {
+    await activateAndSettle();
+    expect(compileMock.mock.calls[0]).toEqual(["/proj", "dataform"]);
+  });
+
+  it("resolves compiled relative paths against the workspace root", async () => {
+    serializeMock.mockReturnValue({
+      nodes: [{ id: "a", filePath: "definitions/a.sqlx" }],
+      downstream: [],
+      issues: [],
+    });
+    activateAndShow();
+    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
+    const update = postedOfType("graphUpdate")[0] as { graph: { nodes: Array<{ filePath: string }> } };
+    expect(update.graph.nodes[0].filePath).toBe("/proj/definitions/a.sqlx");
   });
 });
 
-describe("watcher wiring", () => {
-  it("watches **/*.sqlx and rebuilds on change, create, and delete", async () => {
-    activateAndShow();
-    expect(lastWatcher().glob).toBe("**/*.sqlx");
+describe("background recompile", () => {
+  /** Activate with fake timers and let the eager compile land. */
+  async function activateFake() {
+    vi.useFakeTimers();
+    const context = activateAndShow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(compileMock).toHaveBeenCalledTimes(1);
+    return context;
+  }
 
+  it("watches every file that changes the compile output, relative to the project", () => {
+    activateAndShow();
+    expect(lastWatcher().base).toBe("/proj");
+    for (const part of [
+      "definitions/**/*.sqlx",
+      "definitions/**/*.js",
+      "includes/**/*.js",
+      "workflow_settings.yaml",
+      "dataform.json",
+      "package.json",
+    ]) {
+      expect(lastWatcher().glob).toContain(part);
+    }
+  });
+
+  it("collapses a burst of file events into one recompile after the quiet period", async () => {
+    await activateFake();
     lastWatcher().emitChange();
     lastWatcher().emitCreate();
+    await vi.advanceTimersByTimeAsync(RECOMPILE_DEBOUNCE_MS - 100);
     lastWatcher().emitDelete();
+    await vi.advanceTimersByTimeAsync(RECOMPILE_DEBOUNCE_MS - 100);
+    expect(compileMock).toHaveBeenCalledTimes(1); // still waiting for quiet
+    await vi.advanceTimersByTimeAsync(100);
+    expect(compileMock).toHaveBeenCalledTimes(2);
+  });
 
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(3));
+  it("shows 'compiling' as soon as a file changes", async () => {
+    await activateFake();
+    lastWatcher().emitChange();
+    expect(postedOfType("compilationStatus").at(-1)).toEqual({
+      type: "compilationStatus",
+      status: "compiling",
+    });
+  });
+
+  it("never publishes a compile that a file change superseded", async () => {
+    vi.useFakeTimers();
+    let release!: (v: unknown) => void;
+    compileMock.mockReturnValueOnce(new Promise((r) => (release = r)));
+    activateAndShow();
+    lastWatcher().emitChange(); // lands while the eager compile is still running
+    const STALE = { tables: [{ target: { name: "stale" } }] };
+    release(STALE);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(postedOfType("graphUpdate")).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(RECOMPILE_DEBOUNCE_MS);
+    expect(fromCompileMock).not.toHaveBeenCalledWith(STALE);
+    expect(postedOfType("graphUpdate")).toEqual([{ type: "graphUpdate", graph: SERIALIZED }]);
+  });
+
+  it("keeps the last good graph when a recompile fails", async () => {
+    await activateFake();
+    const updates = postedOfType("graphUpdate").length;
+    compileMock.mockRejectedValueOnce(new Error("definitions/a.sqlx: boom"));
+    lastWatcher().emitChange();
+    await vi.advanceTimersByTimeAsync(RECOMPILE_DEBOUNCE_MS);
+    expect(postedOfType("compilationStatus").at(-1)).toEqual({
+      type: "compilationStatus",
+      status: "error",
+      message: "definitions/a.sqlx: boom",
+    });
+    expect(postedOfType("graphUpdate")).toHaveLength(updates); // nothing replaced or cleared
+    expect(records.errors).toHaveLength(0);
+    expect(lastTreeView()).toMatchObject({ message: expect.stringMatching(/last good graph/) });
+    // ...and the next good compile recovers.
+    lastWatcher().emitChange();
+    await vi.advanceTimersByTimeAsync(RECOMPILE_DEBOUNCE_MS);
+    expect(postedOfType("compilationStatus").at(-1)).toEqual({
+      type: "compilationStatus",
+      status: "ready",
+    });
+    expect(lastTreeView()).toMatchObject({ message: undefined });
+  });
+
+  it("reports a missing CLI once, with a pointer to the setting", async () => {
+    compileMock.mockRejectedValue(new DataformCliNotFoundError("dataform"));
+    activateAndShow();
+    await vi.waitFor(() =>
+      expect(postedOfType("compilationStatus").at(-1)).toMatchObject({ status: "cli-missing" }),
+    );
+    expect(records.executed).toContainEqual(["setContext", "dataformDag.cliMissing", true]);
+    expect(records.errors).toHaveLength(1);
+    expect(window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), "Open Settings");
+    await records.commands.get("dataformDag.refresh")!();
+    await flush();
+    expect(records.errors).toHaveLength(1);
+  });
+
+  it("recompiles with the new CLI when dataformDag.cliPath changes", async () => {
+    await activateAndSettle();
+    changeConfig("dataformDag.cliPath", "/opt/dataform");
+    await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(2));
+    expect(compileMock.mock.calls[1]).toEqual(["/proj", "/opt/dataform"]);
   });
 });
 
@@ -219,7 +379,7 @@ describe("focusActive", () => {
     activateAndShow();
     // Build first so idByPath is populated from the serialized graph.
     lastPanel().webview.emitMessage({ type: "ready" });
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(postedOfType("graphUpdate").length).toBeGreaterThan(0));
     const posted = lastPanel().webview.postMessage as Mock;
     posted.mockClear();
 
@@ -230,7 +390,7 @@ describe("focusActive", () => {
   it("does nothing for an unknown file or no active editor", async () => {
     activateAndShow();
     lastPanel().webview.emitMessage({ type: "ready" });
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(postedOfType("graphUpdate").length).toBeGreaterThan(0));
     const posted = lastPanel().webview.postMessage as Mock;
     posted.mockClear();
 
@@ -249,15 +409,18 @@ describe("dispose", () => {
     expect(window.createWebviewPanel).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps watching .sqlx after the panel closes — the watcher belongs to the store", async () => {
+  it("keeps watching after the panel closes — the watcher belongs to the store", async () => {
+    vi.useFakeTimers();
     activateAndShow();
+    await vi.advanceTimersByTimeAsync(0);
     const watcher = lastWatcher();
     lastPanel().emitDispose();
     expect(watcher.dispose).not.toHaveBeenCalled();
 
-    // The tree view still wants updates, so a change after the panel closed must still rebuild.
+    // The tree view still wants updates, so a change after the panel closed must still recompile.
     watcher.emitChange();
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(RECOMPILE_DEBOUNCE_MS);
+    expect(compileMock).toHaveBeenCalledTimes(2);
   });
 
   it("disposes the watcher when the extension's subscriptions are torn down", () => {
@@ -301,39 +464,10 @@ describe("tag filter persistence", () => {
   });
 });
 
-describe("compiled mode", () => {
-  const OUTPUT = { tables: [] };
-
-  beforeEach(() => {
-    compileMock.mockResolvedValue(OUTPUT);
-    fromCompileMock.mockReturnValue({ nodes: new Map(), downstreamMap: new Map(), issues: [] });
-    serializeMock.mockReturnValue({
-      nodes: [{ id: "a", filePath: "definitions/a.sqlx" }],
-      downstream: [],
-      issues: [],
-    });
-  });
-
-  it("compiles instead of parsing once the mode is switched", async () => {
-    activateAndShow();
-    lastPanel().webview.emitMessage({ type: "setGraphMode", mode: "compiled" });
-    await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(1));
-    expect(compileMock).toHaveBeenCalledWith("/proj");
-    expect(buildMock).not.toHaveBeenCalled();
-  });
-
-  it("resolves compiled relative paths against the workspace root", async () => {
-    activateAndShow();
-    lastPanel().webview.emitMessage({ type: "setGraphMode", mode: "compiled" });
-    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
-    const update = postedOfType("graphUpdate")[0] as { graph: { nodes: Array<{ filePath: string }> } };
-    expect(update.graph.nodes[0].filePath).toBe("/proj/definitions/a.sqlx");
-  });
-
+describe("compile cache", () => {
   it("reuses one compile for the graph and a later SQL request", async () => {
     activateAndShow();
-    lastPanel().webview.emitMessage({ type: "setGraphMode", mode: "compiled" });
-    await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
     findActionMock.mockReturnValue({ target: { name: "a" } });
     sectionsMock.mockReturnValue([{ label: "query", sql: "SELECT 1" }]);
     lastPanel().webview.emitMessage({
@@ -341,37 +475,18 @@ describe("compiled mode", () => {
       nodeId: "a",
       filePath: "/proj/definitions/a.sqlx",
     });
-    await flush();
+    await vi.waitFor(() => expect(postedOfType("compiledSqlResult")).toHaveLength(1));
     expect(compileMock).toHaveBeenCalledTimes(1); // served from cache
   });
 
-  it("recompiles after a .sqlx change invalidates the cache", async () => {
-    activateAndShow();
-    lastPanel().webview.emitMessage({ type: "setGraphMode", mode: "compiled" });
-    await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(1));
-    lastWatcher().emitChange();
+  it("forces a recompile on the refresh command", async () => {
+    await activateAndSettle();
+    records.commands.get("dataformDag.refresh")!();
     await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(2));
-  });
-
-  it("falls back to parsed mode and reports the failure when compilation throws", async () => {
-    compileMock.mockRejectedValueOnce(new Error("no CLI"));
-    activateAndShow();
-    lastPanel().webview.emitMessage({ type: "setGraphMode", mode: "compiled" });
-    await vi.waitFor(() => expect(records.errors).toHaveLength(1));
-    expect(records.errors[0]).toMatch(/could not compile/i);
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
-    expect(postedOfType("graphModeState").at(-1)).toEqual({
-      type: "graphModeState",
-      mode: "parsed",
-    });
   });
 });
 
 describe("compiled SQL", () => {
-  beforeEach(() => {
-    compileMock.mockResolvedValue({ tables: [] });
-  });
-
   it("passes the node id as the target name so a generated assertion cannot win", async () => {
     activateAndShow();
     findActionMock.mockReturnValue({ target: { name: "a" } });
@@ -416,7 +531,7 @@ describe("compiled SQL", () => {
   });
 
   it("reports a compile failure against the requesting node", async () => {
-    compileMock.mockRejectedValueOnce(new Error("no CLI"));
+    compileMock.mockRejectedValue(new Error("no CLI"));
     activateAndShow();
     lastPanel().webview.emitMessage({
       type: "showCompiledSql",
@@ -428,6 +543,7 @@ describe("compiled SQL", () => {
   });
 
   it("drops a result whose compile was superseded by a file change", async () => {
+    vi.useFakeTimers();
     let release!: (v: unknown) => void;
     compileMock.mockReturnValueOnce(new Promise((r) => (release = r)));
     activateAndShow();
@@ -441,7 +557,7 @@ describe("compiled SQL", () => {
     // A .sqlx changes while the compile is still running, then the stale compile lands.
     lastWatcher().emitChange();
     release({ tables: [] });
-    await flush();
+    await vi.advanceTimersByTimeAsync(0);
     expect(postedOfType("compiledSqlResult")).toHaveLength(0);
   });
 });
@@ -461,16 +577,15 @@ describe("showCompiledSql command", () => {
     records.commands.get("dataformDag.showCompiledSql")!();
     // The command builds first, so the warning means "this file produced no node", not "not built yet".
     await vi.waitFor(() => expect(records.warnings.at(-1)).toMatch(/not in the graph/i));
-    expect(buildMock).toHaveBeenCalled();
+    expect(compileMock).toHaveBeenCalled();
   });
 
   it("focuses the node and fetches its SQL for a known file", async () => {
-    compileMock.mockResolvedValue({ tables: [] });
     findActionMock.mockReturnValue({ target: { name: "a" } });
     sectionsMock.mockReturnValue([{ label: "query", sql: "SELECT 1" }]);
     activateAndShow();
     lastPanel().webview.emitMessage({ type: "ready" });
-    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
+    await vi.waitFor(() => expect(postedOfType("graphUpdate").length).toBeGreaterThan(0));
     window.activeTextEditor = { document: { uri: Uri.file("/proj/a.sqlx") } };
     records.commands.get("dataformDag.showCompiledSql")!();
     expect(postedOfType("focusNode").at(-1)).toEqual({ type: "focusNode", nodeId: "a" });
@@ -488,7 +603,7 @@ describe("tree view commands", () => {
   it("opens a node's file and focuses it on the canvas", async () => {
     activateAndShow();
     lastPanel().webview.emitMessage({ type: "ready" });
-    await vi.waitFor(() => expect(postedOfType("graphUpdate")).toHaveLength(1));
+    await vi.waitFor(() => expect(postedOfType("graphUpdate").length).toBeGreaterThan(0));
 
     records.commands.get("dataformDag.revealNode")!(entry);
 
@@ -514,7 +629,6 @@ describe("tree view commands", () => {
   });
 
   it("serves compiled SQL for the clicked row rather than the active editor", async () => {
-    compileMock.mockResolvedValue({ tables: [] });
     findActionMock.mockReturnValue({ target: { name: "a" } });
     sectionsMock.mockReturnValue([{ label: "query", sql: "SELECT 1" }]);
     const context = fakeContext();
@@ -528,18 +642,10 @@ describe("tree view commands", () => {
     expect(findActionMock.mock.calls[0][1]).toBe("a.sqlx");
     expect(postedOfType("compiledSqlResult")[0]).toMatchObject({ nodeId: "a" });
   });
-
-  it("rebuilds the graph on the refresh command", async () => {
-    const context = fakeContext();
-    activate(context as never);
-    records.commands.get("dataformDag.refresh")!();
-    await vi.waitFor(() => expect(buildMock).toHaveBeenCalledTimes(1));
-  });
 });
 
 describe("showCompiledSql command, cold start", () => {
   it("builds the graph when the panel has never received 'ready'", async () => {
-    compileMock.mockResolvedValue({ tables: [] });
     findActionMock.mockReturnValue({ target: { name: "a" } });
     sectionsMock.mockReturnValue([{ label: "query", sql: "SELECT 1" }]);
     const context = fakeContext();

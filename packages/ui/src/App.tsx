@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DataformNode } from "@dataform-dag/core";
-import type { CompilationStatus, GraphMode, HostBridge } from "./HostBridge.js";
+import type { CompilationStatus, HostBridge } from "./HostBridge.js";
 import { useHostBridge } from "./useHostBridge.js";
 import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf } from "./graphToFlow.js";
 import { allTags, filterGraphByTags } from "./filterGraph.js";
@@ -30,7 +30,7 @@ export function App({ bridge }: AppProps): JSX.Element {
     graph,
     focusRequest,
     compilationStatus,
-    graphMode,
+    compilationMessage,
     compiledSql,
     compiledSqlError,
     savedTagFilter,
@@ -174,7 +174,7 @@ export function App({ bridge }: AppProps): JSX.Element {
           </button>
         )}
         {graph && (
-          <GraphDiagnostics issues={graph.issues} graphMode={graphMode} onSelectNode={select} />
+          <GraphDiagnostics issues={graph.issues} onSelectNode={select} />
         )}
         {collapsed && (
           <span className="ddag-topbar__count">
@@ -185,13 +185,11 @@ export function App({ bridge }: AppProps): JSX.Element {
             nodes
           </span>
         )}
-        {capabilities.compiledGraph && (
-          <ModeToggle
-            mode={graphMode}
-            status={compilationStatus}
-            onChange={(mode) => bridge.send({ type: "setGraphMode", mode })}
-          />
-        )}
+        <CompileStatus
+          status={compilationStatus}
+          message={compilationMessage}
+          stale={graph !== null}
+        />
         {!capabilities.liveWatch && (
           <button
             type="button"
@@ -212,7 +210,7 @@ export function App({ bridge }: AppProps): JSX.Element {
               onSelectNode={select}
             />
           ) : (
-            <div className="ddag-empty">Waiting for a graph…</div>
+            <EmptyState status={compilationStatus} message={compilationMessage} />
           )}
         </main>
         {clusterMembers && index && selection && (
@@ -257,35 +255,67 @@ const STATUS_LABEL: Record<CompilationStatus, string> = {
   compiling: "compiling…",
   ready: "compiled",
   error: "compile failed",
+  "cli-missing": "Dataform CLI not found",
 };
 
-function ModeToggle({
-  mode,
+const CLI_HINT =
+  "Install it with `npm i -g @dataform/cli`, add it to the project, or set `dataformDag.cliPath`.";
+
+/**
+ * The status pill. `stale` means a graph is still on screen, so a failure reads as "this is the last
+ * good graph" rather than as an empty canvas; the compiler's message is in the tooltip.
+ */
+function CompileStatus({
   status,
-  onChange,
+  message,
+  stale,
 }: {
-  mode: GraphMode;
   status: CompilationStatus;
-  onChange: (mode: GraphMode) => void;
-}): JSX.Element {
+  message: string | null;
+  stale: boolean;
+}): JSX.Element | null {
+  if (status === "idle") return null;
+  const failed = status === "error" || status === "cli-missing";
   return (
-    <div className="ddag-mode">
-      {(["parsed", "compiled"] as GraphMode[]).map((m) => (
-        <button
-          key={m}
-          type="button"
-          className={`ddag-mode__btn${mode === m ? " ddag-mode__btn--on" : ""}`}
-          aria-pressed={mode === m}
-          onClick={() => onChange(m)}
-        >
-          {m}
-        </button>
-      ))}
-      {status !== "idle" && (
-        <span className={`ddag-status ddag-status--${status}`}>{STATUS_LABEL[status]}</span>
-      )}
-    </div>
+    <span
+      className={`ddag-status ddag-status--${failed ? "error" : status}`}
+      title={message ?? undefined}
+    >
+      {STATUS_LABEL[status]}
+      {failed && stale ? " — showing last good graph" : ""}
+    </span>
   );
+}
+
+/** What the canvas shows before the first successful compile. */
+function EmptyState({
+  status,
+  message,
+}: {
+  status: CompilationStatus;
+  message: string | null;
+}): JSX.Element {
+  if (status === "cli-missing") {
+    return (
+      <div className="ddag-empty">
+        <div className="ddag-empty__box">
+          <strong>Dataform CLI not found.</strong>
+          <p>{CLI_HINT}</p>
+        </div>
+      </div>
+    );
+  }
+  if (status === "error") {
+    return (
+      <div className="ddag-empty">
+        <div className="ddag-empty__box">
+          <strong>The project failed to compile.</strong>
+          {message && <pre className="ddag-empty__message">{message}</pre>}
+        </div>
+      </div>
+    );
+  }
+  return <div className="ddag-empty">Compiling the project…</div>;
 }
 
 function Legend(): JSX.Element {

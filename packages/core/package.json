@@ -1,7 +1,7 @@
 {
   "name": "@dataform-dag/core",
   "version": "0.0.0",
-  "description": "Pure-TS Dataform .sqlx parser + dependency graph builder. No UI, no VS Code, no cloud.",
+  "description": "Dataform dependency graph built from `dataform compile --json`. No UI, no VS Code, no cloud.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./browser": {
-      "types": "./dist/browser.d.ts",
-      "default": "./dist/browser.js"
     }
   },
   "files": ["dist"],

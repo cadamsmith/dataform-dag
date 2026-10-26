@@ -34,7 +34,6 @@ describe("VsCodeBridge", () => {
     expect(new VsCodeBridge().capabilities).toEqual({
       openFile: true,
       compiledSql: true,
-      compiledGraph: true,
       liveWatch: true,
       focusOnActive: true,
     });

@@ -8,20 +8,19 @@ import type {
 
 /**
  * An in-memory {@link HostBridge} for standalone dev + tests — no VS Code, no filesystem. Replies to
- * `ready` with a fixed graph and records outbound messages so tests can assert what the UI sent.
+ * `ready` with a fixed graph (or nothing, for `null` — a host that hasn't compiled yet) and records outbound messages so tests can assert what the UI sent.
  */
 export class MockBridge implements HostBridge {
   readonly sent: OutboundMsg[] = [];
   capabilities: HostCapabilities;
   private listeners = new Set<(msg: InboundMsg) => void>();
   constructor(
-    private readonly graph: SerializedGraph,
+    private readonly graph: SerializedGraph | null,
     capabilities: Partial<HostCapabilities> = {},
   ) {
     this.capabilities = {
       openFile: false,
       compiledSql: false,
-      compiledGraph: false,
       liveWatch: false,
       focusOnActive: false,
       ...capabilities,
@@ -29,7 +28,7 @@ export class MockBridge implements HostBridge {
   }
   send(msg: OutboundMsg): void {
     this.sent.push(msg);
-    if (msg.type === "ready") this.emit({ type: "graphUpdate", graph: this.graph });
+    if (msg.type === "ready" && this.graph) this.emit({ type: "graphUpdate", graph: this.graph });
   }
   onMessage(cb: (msg: InboundMsg) => void): () => void {
     this.listeners.add(cb);

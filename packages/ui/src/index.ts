@@ -9,7 +9,6 @@ export {
 export {
   type CompilationStatus,
   type CompiledSqlSection,
-  type GraphMode,
   type HostBridge,
   type HostCapabilities,
   type InboundMsg,

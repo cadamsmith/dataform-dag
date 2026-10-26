@@ -18,7 +18,6 @@ export class VsCodeBridge implements HostBridge {
   readonly capabilities: HostCapabilities = {
     openFile: true,
     compiledSql: true,
-    compiledGraph: true,
     liveWatch: true,
     focusOnActive: true,
   };

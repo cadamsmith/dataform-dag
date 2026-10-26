@@ -3,7 +3,7 @@
   "displayName": "Dataform DAG",
   "version": "0.1.0",
   "private": true,
-  "description": "Interactive DAG viewer for a Dataform project's .sqlx dependency graph — parsed locally, no cloud.",
+  "description": "Interactive DAG viewer for a Dataform project, compiled locally with the Dataform CLI — no cloud.",
   "publisher": "cadamsmith",
   "license": "MIT",
   "icon": "icon.png",
@@ -32,15 +32,30 @@
   },
   "categories": ["Visualization", "Other"],
   "main": "./dist/extension.js",
-  "activationEvents": ["onView:dataformDag.nodes"],
+  "activationEvents": [
+    "onView:dataformDag.nodes",
+    "workspaceContains:workflow_settings.yaml",
+    "workspaceContains:dataform.json"
+  ],
   "extensionKind": ["workspace"],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "Compiled mode runs `dataform compile`, which evaluates the project's own JavaScript and includes."
+      "description": "The graph is built by running `dataform compile`, which evaluates the project's own JavaScript and includes."
     }
   },
   "contributes": {
+    "configuration": {
+      "title": "Dataform DAG",
+      "properties": {
+        "dataformDag.cliPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the Dataform CLI. When empty, the project's own `node_modules/.bin/dataform` is used if present, then `dataform` on `PATH`."
+        }
+      }
+    },
     "commands": [
       {
         "command": "dataformDag.showGraph",
@@ -88,8 +103,18 @@
       },
       {
         "view": "dataformDag.nodes",
-        "contents": "No Dataform actions found.\nThis view lists every action in a `definitions/**/*.sqlx` tree, grouped by type.\n[Refresh](command:dataformDag.refresh)",
-        "when": "workbenchState != empty"
+        "contents": "The Dataform CLI was not found.\nInstall it with `npm i -g @dataform/cli`, add `@dataform/cli` to the project, or point `dataformDag.cliPath` at it.\n[Open Settings](command:workbench.action.openSettings?%5B%22dataformDag.cliPath%22%5D)\n[Refresh](command:dataformDag.refresh)",
+        "when": "workbenchState != empty && dataformDag.cliMissing"
+      },
+      {
+        "view": "dataformDag.nodes",
+        "contents": "The project failed to compile.\nOpen the graph to see the error; it recompiles on save.\n[Show Graph](command:dataformDag.showGraph)\n[Refresh](command:dataformDag.refresh)",
+        "when": "workbenchState != empty && dataformDag.compileFailed && !dataformDag.cliMissing"
+      },
+      {
+        "view": "dataformDag.nodes",
+        "contents": "No Dataform actions found.\nThis view lists every action `dataform compile` reports, grouped by type.\n[Refresh](command:dataformDag.refresh)",
+        "when": "workbenchState != empty && !dataformDag.cliMissing && !dataformDag.compileFailed"
       }
     ],
     "menus": {

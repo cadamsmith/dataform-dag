@@ -68,8 +68,8 @@ export class DagTreeProvider implements vscode.TreeDataProvider<TreeEntry>, vsco
 
     const { node } = entry;
     const item = new vscode.TreeItem(node.id, vscode.TreeItemCollapsibleState.None);
-    // Identity is stated, not derived: entries are rebuilt on every getChildren, and in compiled mode
-    // a model and the assertions generated from it share one resourceUri — target name is what
+    // Identity is stated, not derived: entries are rebuilt on every getChildren, and a model and the
+    // assertions generated from it share one resourceUri — target name is what
     // actually distinguishes those rows.
     item.id = `node:${node.id}`;
     // Tags are the one piece of metadata the file tree can't show, so they earn the description slot.
@@ -107,7 +107,7 @@ export class DagTreeProvider implements vscode.TreeDataProvider<TreeEntry>, vsco
     return TYPE_ORDER.filter((type) => byType.has(type)).map((type) => ({
       kind: "group",
       type,
-      // In compiled mode the assertions Dataform synthesizes from a model share that model's
+      // The assertions Dataform synthesizes from a model share that model's
       // .sqlx, so several rows can point at one file. They are genuinely separate actions, so they
       // stay separate rows — clicking any of them opens the file they were generated from.
       nodes: [...byType.get(type)!].sort((a, b) => a.id.localeCompare(b.id)),

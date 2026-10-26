@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type {
   CompilationStatus,
   CompiledSqlSection,
-  GraphMode,
   HostBridge,
   SerializedGraph,
 } from "./HostBridge.js";
@@ -12,7 +11,8 @@ export interface HostBridgeState {
   /** The node the host last asked to focus (e.g. active editor changed). Cleared after consumption. */
   focusRequest: { nodeId: string; nonce: number } | null;
   compilationStatus: CompilationStatus;
-  graphMode: GraphMode;
+  /** Detail for an `error` / `cli-missing` status (the compiler's message), else null. */
+  compilationMessage: string | null;
   compiledSql: { nodeId: string; sections: CompiledSqlSection[] } | null;
   compiledSqlError: { nodeId: string; message: string } | null;
   /** Filter the host restored from its own storage, or null if it never sent one. */
@@ -28,7 +28,7 @@ export function useHostBridge(bridge: HostBridge): HostBridgeState {
   const [graph, setGraph] = useState<SerializedGraph | null>(null);
   const [focusRequest, setFocusRequest] = useState<HostBridgeState["focusRequest"]>(null);
   const [compilationStatus, setCompilationStatus] = useState<CompilationStatus>("idle");
-  const [graphMode, setGraphMode] = useState<GraphMode>("parsed");
+  const [compilationMessage, setCompilationMessage] = useState<string | null>(null);
   const [compiledSql, setCompiledSql] = useState<HostBridgeState["compiledSql"]>(null);
   const [compiledSqlError, setCompiledSqlError] =
     useState<HostBridgeState["compiledSqlError"]>(null);
@@ -40,6 +40,7 @@ export function useHostBridge(bridge: HostBridge): HostBridgeState {
       else if (msg.type === "focusNode") setFocusRequest({ nodeId: msg.nodeId, nonce: ++nonce });
       else if (msg.type === "compilationStatus") {
         setCompilationStatus(msg.status);
+        setCompilationMessage(msg.message ?? null);
         // A run that is starting (or was reset) invalidates whatever SQL is on screen — it was
         // produced by the previous compile and may no longer match the file.
         if (msg.status === "idle" || msg.status === "compiling") {
@@ -53,7 +54,6 @@ export function useHostBridge(bridge: HostBridge): HostBridgeState {
         setCompiledSqlError({ nodeId: msg.nodeId, message: msg.message });
         setCompiledSql(null);
       } else if (msg.type === "tagFilterState") setSavedTagFilter(msg.selectedTags);
-      else if (msg.type === "graphModeState") setGraphMode(msg.mode);
     });
     bridge.send({ type: "ready" });
     return unsubscribe;
@@ -62,7 +62,7 @@ export function useHostBridge(bridge: HostBridge): HostBridgeState {
     graph,
     focusRequest,
     compilationStatus,
-    graphMode,
+    compilationMessage,
     compiledSql,
     compiledSqlError,
     savedTagFilter,

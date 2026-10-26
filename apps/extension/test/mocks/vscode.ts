@@ -62,6 +62,7 @@ class MockPanel {
 
 class MockWatcher {
   glob = "";
+  base: string | undefined;
   readonly dispose = vi.fn();
   private readonly change: Array<() => void> = [];
   private readonly create: Array<() => void> = [];
@@ -126,6 +127,11 @@ interface Records {
   activeEditorHandlers: Array<(editor: unknown) => void>;
   warnings: string[];
   errors: string[];
+  /** Every `commands.executeCommand` call, e.g. `["setContext", key, value]`. */
+  executed: unknown[][];
+  /** The workspace configuration `getConfiguration().get(key)` reads. */
+  config: Map<string, unknown>;
+  configHandlers: Array<(e: { affectsConfiguration: (key: string) => boolean }) => void>;
   shownDocs: Array<{ uri: MockUri; opts: unknown }>;
 }
 
@@ -137,6 +143,9 @@ export const records: Records = {
   activeEditorHandlers: [],
   warnings: [],
   errors: [],
+  executed: [],
+  config: new Map(),
+  configHandlers: [],
   shownDocs: [],
 };
 
@@ -147,6 +156,12 @@ export const lastTreeView = (): MockTreeView => records.treeViews[records.treeVi
 export const lastActiveEditorHandler = (): ((editor: unknown) => void) =>
   records.activeEditorHandlers[records.activeEditorHandlers.length - 1];
 
+/** Simulate the user changing a setting: update it and notify `onDidChangeConfiguration`. */
+export function changeConfig(key: string, value: unknown): void {
+  records.config.set(key, value);
+  for (const h of records.configHandlers) h({ affectsConfiguration: (k) => k === key });
+}
+
 /** Reset all recorded state between tests. `workspaceFolders` is mutated directly by tests. */
 export function resetMock(): void {
   records.commands.clear();
@@ -156,6 +171,9 @@ export function resetMock(): void {
   records.activeEditorHandlers.length = 0;
   records.warnings.length = 0;
   records.errors.length = 0;
+  records.executed.length = 0;
+  records.config.clear();
+  records.configHandlers.length = 0;
   records.shownDocs.length = 0;
   workspace.workspaceFolders = undefined;
   window.activeTextEditor = undefined;
@@ -181,7 +199,7 @@ export const window: {
   createTreeView: (id: string, opts: { treeDataProvider: MockTreeDataProvider }) => MockTreeView;
   onDidChangeActiveTextEditor: (cb: (editor: unknown) => void) => MockDisposable;
   showWarningMessage: (msg: string) => Promise<undefined>;
-  showErrorMessage: (msg: string) => Promise<undefined>;
+  showErrorMessage: (msg: string, ...items: string[]) => Promise<string | undefined>;
   showTextDocument: (u: MockUri, opts: unknown) => Promise<undefined>;
 } = {
   activeTextEditor: undefined,
@@ -203,9 +221,9 @@ export const window: {
     records.warnings.push(msg);
     return Promise.resolve(undefined);
   }),
-  showErrorMessage: vi.fn((msg: string) => {
+  showErrorMessage: vi.fn((msg: string, ..._items: string[]) => {
     records.errors.push(msg);
-    return Promise.resolve(undefined);
+    return Promise.resolve<string | undefined>(undefined);
   }),
   showTextDocument: vi.fn((u: MockUri, opts: unknown) => {
     records.shownDocs.push({ uri: u, opts });
@@ -218,19 +236,47 @@ export const commands = {
     records.commands.set(id, cb);
     return { dispose: vi.fn() };
   }),
+  executeCommand: vi.fn((...args: unknown[]) => {
+    records.executed.push(args);
+    return Promise.resolve(undefined);
+  }),
 };
+
+export class RelativePattern {
+  constructor(
+    public readonly base: WorkspaceFolder,
+    public readonly pattern: string,
+  ) {}
+}
 
 export const workspace: {
   workspaceFolders: WorkspaceFolder[] | undefined;
-  createFileSystemWatcher: (glob: string) => MockWatcher;
+  createFileSystemWatcher: (glob: string | RelativePattern) => MockWatcher;
+  getConfiguration: () => { get: <T>(key: string) => T | undefined };
+  onDidChangeConfiguration: (
+    cb: (e: { affectsConfiguration: (key: string) => boolean }) => void,
+    thisArg?: unknown,
+    disposables?: MockDisposable[],
+  ) => MockDisposable;
 } = {
   workspaceFolders: undefined,
-  createFileSystemWatcher: vi.fn((glob: string) => {
+  createFileSystemWatcher: vi.fn((glob: string | RelativePattern) => {
     const w = new MockWatcher();
-    w.glob = glob;
+    if (typeof glob === "string") w.glob = glob;
+    else {
+      w.glob = glob.pattern;
+      w.base = glob.base.uri.fsPath;
+    }
     records.watchers.push(w);
     return w;
   }),
+  getConfiguration: () => ({ get: <T>(key: string) => records.config.get(key) as T | undefined }),
+  onDidChangeConfiguration(cb, _thisArg, disposables) {
+    records.configHandlers.push(cb);
+    const d = { dispose: vi.fn() };
+    disposables?.push(d);
+    return d;
+  },
 };
 
 export const Uri = {
