@@ -15,7 +15,8 @@ export type NodeType =
  * One node in the dependency graph — a single Dataform action. `id` is the target NAME
  * (`config.name` when present, else the filename without `.sqlx`), which is what `ref()` resolves
  * against; keying by basename alone would detach any declaration that renames itself (e.g. a file
- * `raw_fare_snapshots.sqlx` declaring `name: "fare_snapshots"`).
+ * `raw_fare_snapshots.sqlx` declaring `name: "fare_snapshots"`). A name shared by two actions in
+ * different schemas is qualified as `schema.name` for those nodes only.
  */
 export interface DataformNode {
   id: string;
@@ -28,11 +29,10 @@ export interface DataformNode {
 
 /**
  * A problem found while building the graph. These are advisory, not fatal: the graph is still
- * usable.
+ * usable. There is no "unresolved reference" kind: a compile with a missing dependency fails
+ * outright, so a graph built from a successful one has every ref resolved.
  */
-export type GraphIssue =
-  | { kind: "unresolved-reference"; nodeId: string; filePath: string; reference: string }
-  | { kind: "duplicate-node-id"; nodeId: string; filePaths: string[] };
+export type GraphIssue = { kind: "duplicate-node-id"; nodeId: string; filePaths: string[] };
 
 /**
  * An immutable dependency graph. `downstreamMap` is derived once at build time: it inverts each

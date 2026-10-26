@@ -26,9 +26,10 @@ including inline assertions and refs built in JavaScript.
   highlighted on the canvas.
 - **Live updates.** Save a `.sqlx`, a `.js` in `definitions/` or `includes/`, or the project
   settings and the project recompiles in the background — a burst of saves compiles once. If a save
-  breaks the build, the last good graph stays on screen and the toolbar says what failed.
-- **Catch broken refs.** Unresolved `ref()`s and duplicate node names show up as issues in the top
-  bar, each one clickable straight to the node.
+  breaks the build, the last good graph stays on screen and the toolbar says what failed. A
+  `ref()` to something that doesn't exist counts as a failed build.
+- **Same name, different schema.** Two actions that share a name, like `staging.orders` and
+  `marts.orders`, stay separate nodes, labelled with their schema.
 
 ## Getting started
 

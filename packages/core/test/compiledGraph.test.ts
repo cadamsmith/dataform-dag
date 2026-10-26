@@ -50,6 +50,53 @@ describe("graphFromCompileOutput (golden dataform compile --json)", () => {
   });
 });
 
+describe("graphFromCompileOutput node ids", () => {
+  // A valid project: `a.dup` and `b.dup` are told apart by schema, and every ref to them is qualified.
+  const output: CompileOutput = {
+    tables: [
+      { target: { database: "p", schema: "a", name: "dup" }, fileName: "definitions/dup_a.sqlx" },
+      { target: { database: "p", schema: "b", name: "dup" }, fileName: "definitions/dup_b.sqlx" },
+      {
+        target: { database: "p", schema: "marts", name: "uses_a" },
+        fileName: "definitions/uses_a.sqlx",
+        dependencyTargets: [{ database: "p", schema: "a", name: "dup" }],
+      },
+      {
+        target: { database: "p", schema: "marts", name: "uses_b" },
+        fileName: "definitions/uses_b.sqlx",
+        dependencyTargets: [{ database: "p", schema: "b", name: "dup" }],
+      },
+    ],
+  };
+  const g = graphFromCompileOutput(output);
+
+  it("qualifies a name shared across schemas instead of merging the two actions", () => {
+    expect(g.nodes.get("a.dup")?.filePath).toBe("definitions/dup_a.sqlx");
+    expect(g.nodes.get("b.dup")?.filePath).toBe("definitions/dup_b.sqlx");
+    expect(g.nodes.has("dup")).toBe(false);
+    expect(g.issues).toEqual([]);
+  });
+
+  it("points each ref at the action it actually names", () => {
+    expect(g.nodes.get("uses_a")?.refs).toEqual(["a.dup"]);
+    expect(g.nodes.get("uses_b")?.refs).toEqual(["b.dup"]);
+  });
+
+  it("leaves a unique name unqualified", () => {
+    expect(g.nodes.has("uses_a")).toBe(true);
+  });
+
+  it("qualifies by database when the schema collides too", () => {
+    const g2 = graphFromCompileOutput({
+      tables: [
+        { target: { database: "p1", schema: "s", name: "t" }, fileName: "one.sqlx" },
+        { target: { database: "p2", schema: "s", name: "t" }, fileName: "two.sqlx" },
+      ],
+    });
+    expect([...g2.nodes.keys()].sort()).toEqual(["p1.s.t", "p2.s.t"]);
+  });
+});
+
 describe("resolveDataformCli", () => {
   const bin = process.platform === "win32" ? "dataform.cmd" : "dataform";
 

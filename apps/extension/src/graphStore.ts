@@ -232,8 +232,8 @@ export class GraphStore implements vscode.Disposable {
       const output = await this.compile(root);
       // Gate the RESULT, not just the cache write: a superseded compile must not paint stale SQL.
       if (generation !== this.compileGeneration) return undefined;
-      // `nodeId` as the target name is what picks the table over an assertion generated from the
-      // same file — the same disambiguation `idByPath` needs above.
+      // `nodeId` (the target name, schema-qualified on a collision) is what picks the table over an
+      // assertion generated from the same file — the same disambiguation `idByPath` needs above.
       const action = findCompiledActionByFile(output, path.relative(root, filePath), nodeId);
       if (!action) {
         return { ok: false, message: `No compiled action found for ${path.basename(filePath)}.` };

@@ -126,7 +126,7 @@ describe("diagnostics", () => {
   const withIssues: SerializedGraph = {
     ...graph,
     issues: [
-      { kind: "unresolved-reference", nodeId: "mid", filePath: "def/mid.sqlx", reference: "gone" },
+      { kind: "duplicate-node-id", nodeId: "mid", filePaths: ["def/mid.sqlx", "def/mid_copy.sqlx"] },
     ],
   };
 
@@ -136,10 +136,10 @@ describe("diagnostics", () => {
     expect(screen.queryByText(/issue/)).not.toBeInTheDocument();
   });
 
-  it("lists an unresolved reference", async () => {
+  it("lists a duplicate id with each of its files", async () => {
     render(<App bridge={new MockBridge(withIssues)} />);
     await userEvent.click(await screen.findByText("1 issue"));
-    expect(screen.getByText("gone")).toBeInTheDocument();
+    expect(screen.getByText("def/mid_copy.sqlx")).toBeInTheDocument();
   });
 });
 

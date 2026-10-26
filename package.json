@@ -2,7 +2,7 @@
   "name": "dataform-dag",
   "version": "0.0.0",
   "private": true,
-  "description": "Interactive local DAG viewer for a Dataform project — parsed from .sqlx files, no cloud connection required.",
+  "description": "Interactive local DAG viewer for a Dataform project, built from a local `dataform compile` — no cloud connection required.",
   "workspaces": [
     "packages/*",
     "apps/*"

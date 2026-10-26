@@ -67,26 +67,59 @@ export interface CompiledSqlSection {
  * `config.assertions`) become `assertion` nodes; edges come straight from `dependencyTargets`.
  */
 export function graphFromCompileOutput(output: CompileOutput): DataformGraph {
+  const groups: Array<[CompileAction[] | undefined, NodeType]> = [
+    [output.tables, "table"],
+    [output.operations, "operations"],
+    [output.assertions, "assertion"],
+    [output.declarations, "source"],
+  ];
+  const idOf = nodeIdResolver(groups.flatMap(([actions]) => (actions ?? []).map((a) => a.target)));
   const nodes: DataformNode[] = [];
-  const collect = (actions: CompileAction[] | undefined, fallback: NodeType) => {
-    for (const a of actions ?? []) nodes.push(toNode(a, fallback));
-  };
-  collect(output.tables, "table");
-  collect(output.operations, "operations");
-  collect(output.assertions, "assertion");
-  collect(output.declarations, "source");
+  for (const [actions, fallback] of groups) {
+    for (const a of actions ?? []) nodes.push(toNode(a, fallback, idOf));
+  }
   return buildGraph(nodes);
 }
 
-function toNode(a: CompileAction, fallback: NodeType): DataformNode {
+function toNode(
+  a: CompileAction,
+  fallback: NodeType,
+  idOf: (t: CompileTarget) => string,
+): DataformNode {
   return {
-    id: a.target.name,
+    id: idOf(a.target),
     filePath: a.fileName ?? a.target.name,
     type: mapCompileType(a.type, fallback),
     tags: a.tags ?? [],
-    refs: (a.dependencyTargets ?? []).map((t) => t.name),
+    refs: (a.dependencyTargets ?? []).map(idOf),
     description: a.actionDescriptor?.description,
   };
+}
+
+/**
+ * A node's id is its bare target name, unless another action shares that name: Dataform tells
+ * `a.orders` and `b.orders` apart by schema, so keying both as `orders` would merge two actions into
+ * one node and cross their edges. Colliding names are qualified as `schema.name`, or as
+ * `database.schema.name` when the schema collides too. Everything else keeps its short name.
+ */
+function nodeIdResolver(targets: CompileTarget[]): (t: CompileTarget) => string {
+  const count = (keys: string[]) => {
+    const counts = new Map<string, number>();
+    for (const k of keys) counts.set(k, (counts.get(k) ?? 0) + 1);
+    return counts;
+  };
+  const byName = count(targets.map((t) => t.name));
+  const bySchema = count(targets.map(schemaQualified));
+  return (t) => {
+    if ((byName.get(t.name) ?? 0) <= 1) return t.name;
+    const schemaId = schemaQualified(t);
+    if ((bySchema.get(schemaId) ?? 0) <= 1) return schemaId;
+    return [t.database, t.schema, t.name].filter(Boolean).join(".");
+  };
+}
+
+function schemaQualified(t: CompileTarget): string {
+  return t.schema ? `${t.schema}.${t.name}` : t.name;
 }
 
 function mapCompileType(type: string | undefined, fallback: NodeType): NodeType {
@@ -136,14 +169,14 @@ function normalizeFilePath(filePath: string): string {
 
 /**
  * Find the compiled action a `.sqlx` produced. One file can yield SEVERAL actions — a table plus the
- * assertions Dataform generates from inline `config.assertions` — so `targetName` disambiguates when
- * the caller knows which node it wants; without it the first match wins, which is the table rather
- * than a generated assertion because {@link graphFromCompileOutput} collects tables first.
+ * assertions Dataform generates from inline `config.assertions` — so `nodeId` disambiguates when the
+ * caller knows which node it wants; without it the first match wins, which is the table rather than
+ * a generated assertion because {@link graphFromCompileOutput} collects tables first.
  */
 export function findCompiledActionByFile(
   output: CompileOutput,
   filePath: string,
-  targetName?: string,
+  nodeId?: string,
 ): CompileAction | undefined {
   const wanted = normalizeFilePath(filePath);
   const matches = [
@@ -151,8 +184,14 @@ export function findCompiledActionByFile(
     ...(output.operations ?? []),
     ...(output.assertions ?? []),
   ].filter((a) => a.fileName !== undefined && normalizeFilePath(a.fileName) === wanted);
-  if (targetName) {
-    const exact = matches.find((a) => a.target.name === targetName);
+  if (nodeId) {
+    // A node id is the bare name or, for a colliding name, a qualified one; see `nodeIdResolver`.
+    const exact = matches.find(
+      ({ target: t }) =>
+        nodeId === t.name ||
+        nodeId === schemaQualified(t) ||
+        nodeId === [t.database, t.schema, t.name].filter(Boolean).join("."),
+    );
     if (exact) return exact;
   }
   return matches[0];

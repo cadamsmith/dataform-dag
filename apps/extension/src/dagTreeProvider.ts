@@ -38,8 +38,8 @@ export type TreeEntry =
  *
  * It deliberately answers a different question than the Explorer — "what kinds of actions exist and
  * what are they called" rather than "what files are on disk" — so it groups by {@link NodeType} and
- * labels rows by target name (`config.name`), which is what `ref()` resolves against and is often
- * not the filename.
+ * labels rows by node id: the target name (`config.name`), which is what `ref()` resolves against and
+ * is often not the filename, schema-qualified when two actions share it.
  *
  * Reads {@link GraphStore.current} on every call rather than caching a graph of its own: the panel
  * and the tree must never disagree about what the project contains.

@@ -44,14 +44,6 @@ function DiagnosticItem({
       {issue.nodeId}
     </button>
   );
-  if (issue.kind === "unresolved-reference") {
-    return (
-      <>
-        <span className="ddag-diagnostics__kind">unresolved ref</span> {node} depends on{" "}
-        <code className="ddag-code">{issue.reference}</code>, which is not in the graph.
-      </>
-    );
-  }
   return (
     <>
       <span className="ddag-diagnostics__kind">duplicate id</span> {node} is declared by{" "}

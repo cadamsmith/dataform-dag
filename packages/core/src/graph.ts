@@ -3,9 +3,9 @@ import type { DataformGraph, DataformNode, GraphIssue, SerializedGraph } from ".
 /**
  * Build the immutable graph from a flat node list. Edges come from each node's `refs`; the inverse
  * `downstreamMap` is computed once here. A ref to a name that has no node (an unresolved/external
- * dependency) is kept in the node's `refs` but seeds no downstream entry — traversal simply skips
- * nodes that aren't present, so a dangling ref never crashes and never invents a phantom node.
- * Those danglers, and any id claimed by more than one file, are reported in `issues`.
+ * dependency) is kept in the node's `refs` — traversal simply skips nodes that aren't present, so a
+ * dangling ref never crashes and never invents a phantom node. Any id claimed by more than one
+ * action is reported in `issues`.
  */
 export function buildGraph(nodes: DataformNode[]): DataformGraph {
   const nodeMap = new Map<string, DataformNode>();
@@ -20,29 +20,15 @@ export function buildGraph(nodes: DataformNode[]): DataformGraph {
   }
 
   const issues: GraphIssue[] = [];
-  // Node identity is the target name, so two actions sharing an id cannot both be represented —
-  // one of them is unreachable in the rendered graph.
+  // Two actions sharing an id cannot both be represented: one of them is unreachable in the
+  // rendered graph. `graphFromCompileOutput` qualifies colliding names, so this is a safety net.
   for (const [nodeId, filePaths] of filesById) {
     if (filePaths.length > 1) issues.push({ kind: "duplicate-node-id", nodeId, filePaths });
   }
 
   const downstreamMap = new Map<string, Set<string>>();
-  const seenUnresolved = new Set<string>();
   for (const node of nodes) {
     for (const upstream of node.refs) {
-      if (!nodeMap.has(upstream)) {
-        // One issue per (node, reference) pair — a ref repeated across the file body is one problem.
-        const key = `${node.id}\u0000${upstream}`;
-        if (!seenUnresolved.has(key)) {
-          seenUnresolved.add(key);
-          issues.push({
-            kind: "unresolved-reference",
-            nodeId: node.id,
-            filePath: node.filePath,
-            reference: upstream,
-          });
-        }
-      }
       let set = downstreamMap.get(upstream);
       if (!set) {
         set = new Set<string>();

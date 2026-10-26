@@ -97,6 +97,17 @@ describe("findCompiledActionByFile", () => {
     expect(found?.target.name).toBe("orders_assertions_uniqueKey");
   });
 
+  it("selects the action a schema-qualified node id names", () => {
+    const qualified: CompileOutput = {
+      tables: [
+        action({ target: { schema: "a", name: "dup" }, fileName: "definitions/dup.sqlx" }),
+        action({ target: { schema: "b", name: "dup" }, fileName: "definitions/dup.sqlx" }),
+      ],
+    };
+    const found = findCompiledActionByFile(qualified, "definitions/dup.sqlx", "b.dup");
+    expect(found?.target.schema).toBe("b");
+  });
+
   it("falls back to the first match when the target name is unknown", () => {
     expect(findCompiledActionByFile(output, "definitions/orders.sqlx", "nope")?.target.name).toBe(
       "orders",

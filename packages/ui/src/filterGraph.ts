@@ -12,8 +12,8 @@ export function allTags(graph: SerializedGraph): string[] {
  * own `--tags` selection works. Edges whose other end didn't survive are dropped so the layout never
  * points at a node that isn't rendered.
  *
- * `issues` passes through untouched by design: diagnostics describe the WHOLE project, and
- * recomputing them here would report every filtered-out dependency as an unresolved reference.
+ * `issues` passes through untouched by design: diagnostics describe the WHOLE project, not the
+ * filtered slice of it.
  */
 export function filterGraphByTags(
   graph: SerializedGraph,

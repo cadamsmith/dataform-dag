@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Constraints and hard-won invariants for this repo. See `README.md` for what the tool is and
-`ROADMAP.md` for what's still open.
+Constraints and hard-won invariants for this repo. See `README.md` for how it's put together and
+`apps/extension/README.md` for what the extension does.
 
 ## Commands
 
@@ -10,7 +10,9 @@ npm install
 npm run build:core   # ui + the extension depend on core's build output/types — run this first
 npm run typecheck
 npm test             # all workspaces (core + ui + extension)
-npm run dev:ui       # shared UI standalone against a mock graph
+npm run dev:ui       # shared UI standalone against a mock graph (MockBridge)
+npm run watch -w dataform-dag    # extension build in watch mode; F5 "Run Extension" opens examples/starlog
+npm run package -w dataform-dag  # build the .vsix
 ```
 
 ## Invariants — do NOT regress these (each was a real fix)
@@ -35,10 +37,17 @@ npm run dev:ui       # shared UI standalone against a mock graph
   names no file and MUST never be sent to a host — `openFile`/`showCompiledSql` always carry a real
   member node. Collapsing before the tag filter would describe assertions that aren't on screen, and
   a group with no upstream is never collapsed because the filter strips refs to dropped nodes.
+  Clusters are listed in the detail panel and deliberately NOT expanded in place on the canvas. That
+  would need a full ELK relayout on every toggle, which is slow on a big project, and because nodes
+  are locked the canvas would shift under the click.
 - **`packages/ui` imports `@dataform-dag/core` for TYPES ONLY** (`import type`). That's what keeps
   core's Node-only modules out of the webview bundle. Don't add a value import from core to the UI.
 - **Node identity = target name** (`target.name` from compile), not filename. One `.sqlx` can
-  yield several actions (a table plus its inline assertions), and a file can rename itself.
+  yield several actions (a table plus its inline assertions), and a file can rename itself. A name
+  shared by two actions (`a.orders`, `b.orders`) is qualified to `schema.name` (or
+  `database.schema.name`) for just those nodes (`nodeIdResolver` in `graphSource.ts`). Keying both
+  as `orders` merged them into one node with crossed edges. Anything matching a node id back to a
+  compiled action (`findCompiledActionByFile`) must accept the qualified forms.
 - **React Flow nodes are locked** (`nodesDraggable={false}`); the ELK layout is authoritative.
   Dragging + interactive relayout was built and then deliberately removed (positions aren't
   persisted; relayout produced surprising crossings). Don't re-add it. Controlled RF nodes still

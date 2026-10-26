@@ -12,7 +12,7 @@ const graph: SerializedGraph = {
     ["src", ["mid"]],
     ["mid", ["leaf"]],
   ],
-  issues: [{ kind: "unresolved-reference", nodeId: "src", filePath: "src.sqlx", reference: "gone" }],
+  issues: [{ kind: "duplicate-node-id", nodeId: "src", filePaths: ["src.sqlx", "src_copy.sqlx"] }],
 };
 
 describe("allTags", () => {
@@ -55,7 +55,7 @@ describe("filterGraphByTags", () => {
   });
 
   it("carries project-wide issues through untouched", () => {
-    // Recomputing diagnostics on the filtered set would report every hidden dependency as unresolved.
+    // Diagnostics describe the whole project, not the filtered slice.
     expect(filterGraphByTags(graph, ["mart"]).issues).toEqual(graph.issues);
   });
 

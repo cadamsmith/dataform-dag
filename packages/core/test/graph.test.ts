@@ -38,18 +38,9 @@ describe("diagnostics", () => {
     expect(buildGraph(nodes).issues).toEqual([]);
   });
 
-  it("reports a ref that resolves to no node", () => {
-    const g = buildGraph([node("x", ["missing"])]);
-    expect(g.issues).toEqual([
-      { kind: "unresolved-reference", nodeId: "x", filePath: "x.sqlx", reference: "missing" },
-    ]);
-  });
-
-  it("reports one issue per (node, reference) pair, not per occurrence", () => {
-    // buildGraph sees deduped refs, but two different nodes missing the same target are two issues.
-    const g = buildGraph([node("x", ["missing"]), node("y", ["missing"])]);
-    expect(g.issues).toHaveLength(2);
-    expect(g.issues.map((i) => i.nodeId).sort()).toEqual(["x", "y"]);
+  it("does not report a dangling ref", () => {
+    // A compile with a missing dependency fails outright, so there is no issue kind for one.
+    expect(buildGraph([node("x", ["missing"])]).issues).toEqual([]);
   });
 
   it("reports an id claimed by more than one file", () => {
