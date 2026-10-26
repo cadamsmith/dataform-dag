@@ -41,6 +41,26 @@ describe("DagGraph (real React Flow canvas)", () => {
   });
 });
 
+describe("DagGraph emphasis across relayouts", () => {
+  // With nothing selected, no other input to the styling changes when a layout lands, so only the
+  // graph itself can tell the canvas to reapply it.
+  it("keeps context styling when a new layout lands with the same context set", async () => {
+    sizePane();
+    const props = { selectedId: null, focus: null, onSelectNode: vi.fn(), contextIds: ["src"] };
+    const { container, rerender } = render(<DagGraph graph={layoutGraph(graph)} {...props} />);
+    const isContext = () =>
+      container.querySelector('[data-id="src"] .ddag-node')?.classList.contains("is-context");
+    await waitFor(() => expect(isContext()).toBe(true));
+
+    // A recompile or filter change lands a new layout object; the context set is unchanged.
+    rerender(<DagGraph graph={layoutGraph(graph)} {...props} />);
+
+    await waitFor(() => expect(container.querySelectorAll(".react-flow__node").length).toBe(2));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(isContext()).toBe(true);
+  });
+});
+
 describe("anchorBetween", () => {
   const at = (id: string, x: number, y: number) => ({
     id,

@@ -1,4 +1,5 @@
 import type { SerializedGraph } from "@dataform-dag/core";
+import { lineageOf } from "./lineage.js";
 
 /** Every tag present in the graph, deduped, for the filter's option list. */
 export function allTags(graph: SerializedGraph): string[] {
@@ -33,6 +34,31 @@ export function filterGraphByTags(
     new Set(graph.nodes.filter((node) => node.tags.some((tag) => wanted.has(tag))).map((n) => n.id)),
   );
 }
+
+/**
+ * The tag filter with its optional context: when `withContext` is on, every direct upstream and
+ * downstream neighbor of a matching node is kept too, so a filtered slice still shows where its
+ * data comes from and what reads it. `context` names those extra nodes (never a match), so the
+ * canvas can draw them as context rather than as results.
+ *
+ * Context is ONE hop on purpose: any further and it stops being "the edges of this slice" and
+ * becomes the whole lineage, which focus mode already does with a depth control.
+ */
+export function filterGraphWithContext(
+  graph: SerializedGraph,
+  selectedTags: string[],
+  withContext: boolean,
+): { graph: SerializedGraph; context: ReadonlySet<string> } {
+  const matched = filterGraphByTags(graph, selectedTags);
+  if (selectedTags.length === 0 || !withContext) return { graph: matched, context: NO_CONTEXT };
+  const matchedIds = matched.nodes.map((n) => n.id);
+  const { keep } = lineageOf(graph, matchedIds, 1);
+  const context = new Set(keep);
+  for (const id of matchedIds) context.delete(id);
+  return { graph: restrictGraph(graph, keep), context };
+}
+
+const NO_CONTEXT: ReadonlySet<string> = new Set();
 
 /**
  * The subgraph of the nodes in `keep`. Refs and downstream entries pointing at a dropped node go

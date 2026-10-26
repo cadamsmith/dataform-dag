@@ -96,9 +96,17 @@ export function TagFilter({ tagCounts, selectedTags, onChange }: TagFilterProps)
 export function ActiveTags({
   selectedTags,
   onChange,
+  showContext,
+  onShowContextChange,
+  contextCount,
 }: {
   selectedTags: string[];
   onChange: (selectedTags: string[]) => void;
+  /** Also show each match's direct upstream and downstream neighbors, drawn as context. */
+  showContext: boolean;
+  onShowContextChange: (show: boolean) => void;
+  /** How many neighbors that added, so the switch says what it did. */
+  contextCount: number;
 }): JSX.Element | null {
   if (selectedTags.length === 0) return null;
   return (
@@ -119,6 +127,18 @@ export function ActiveTags({
       ))}
       <button type="button" className="ddag-textbtn" onClick={() => onChange([])}>
         Clear
+      </button>
+      <span className="ddag-chips__spacer" />
+      <button
+        type="button"
+        className={`ddag-tool ddag-tool--quiet ddag-switch${showContext ? " is-on" : ""}`}
+        aria-pressed={showContext}
+        onClick={() => onShowContextChange(!showContext)}
+        title="Also show the direct upstream and downstream of every match, drawn dashed"
+      >
+        <span className="ddag-switch__track" aria-hidden="true" />
+        Show neighbors
+        {showContext && <span className="ddag-chips__extra">+{contextCount}</span>}
       </button>
     </div>
   );

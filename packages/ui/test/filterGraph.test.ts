@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SerializedGraph } from "@dataform-dag/core";
-import { allTags, filterGraphByTags } from "../src/filterGraph.js";
+import { allTags, filterGraphByTags, filterGraphWithContext } from "../src/filterGraph.js";
 
 const graph: SerializedGraph = {
   nodes: [
@@ -62,5 +62,40 @@ describe("filterGraphByTags", () => {
   it("does not mutate the input graph", () => {
     filterGraphByTags(graph, ["core"]);
     expect(graph.nodes[1]?.refs).toEqual(["src"]);
+  });
+});
+
+describe("filterGraphWithContext", () => {
+  // src ─▶ mid ─▶ leaf, tagged raw / core+raw / mart
+  it("adds each match's direct neighbors, and names them as context", () => {
+    const { graph: g, context } = filterGraphWithContext(graph, ["mart"], true);
+    expect(g.nodes.map((n) => n.id)).toEqual(["mid", "leaf"]);
+    expect([...context]).toEqual(["mid"]);
+    // The neighbor keeps its edge to the match, and only that.
+    expect(g.nodes.find((n) => n.id === "leaf")!.refs).toEqual(["mid"]);
+    expect(g.nodes.find((n) => n.id === "mid")!.refs).toEqual([]);
+  });
+
+  it("goes one hop only", () => {
+    const { graph: g } = filterGraphWithContext(graph, ["core"], true);
+    expect(g.nodes.map((n) => n.id).sort()).toEqual(["leaf", "mid", "src"]);
+    const { graph: g2, context } = filterGraphWithContext(
+      { ...graph, nodes: graph.nodes.map((n) => (n.id === "mid" ? { ...n, tags: [] } : n)) },
+      ["mart"],
+      true,
+    );
+    expect(g2.nodes.map((n) => n.id)).toEqual(["mid", "leaf"]);
+    expect(context.has("src")).toBe(false);
+  });
+
+  it("never calls a match context, even when it neighbors another match", () => {
+    const { context } = filterGraphWithContext(graph, ["raw"], true);
+    expect([...context]).toEqual(["leaf"]);
+  });
+
+  it("is the plain tag filter when off, or when no tag is selected", () => {
+    expect(filterGraphWithContext(graph, ["mart"], false).graph).toEqual(filterGraphByTags(graph, ["mart"]));
+    expect(filterGraphWithContext(graph, [], true).graph).toBe(graph);
+    expect(filterGraphWithContext(graph, [], true).context.size).toBe(0);
   });
 });

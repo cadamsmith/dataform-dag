@@ -536,6 +536,18 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .ddag-app {
 .ddag-chips__lead {
   color: var(--ddag-muted);
 }
+.ddag-chips__spacer {
+  flex: 1;
+}
+.ddag-chips__extra {
+  color: var(--ddag-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ddag-tool--quiet {
+  height: 24px;
+  border-color: transparent;
+  font-size: 12px;
+}
 .ddag-chip {
   display: inline-flex;
   align-items: center;
@@ -799,6 +811,27 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .ddag-app {
     0 0 0 2px var(--ddag-bg),
     0 0 0 4px var(--type),
     0 6px 22px color-mix(in srgb, var(--type) 30%, transparent);
+}
+/* Context: a neighbor of the tag filter's matches, not a match. Dashed and faded so the slice you
+   filtered for still reads first; it brightens under the pointer like any node. */
+.ddag-node.is-context {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ddag-fg) 30%, transparent);
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.6;
+}
+.ddag-node.is-context .ddag-node__tab {
+  background: transparent;
+  border-right-style: dashed;
+}
+.ddag-node.is-context:hover {
+  opacity: 1;
+}
+.ddag-node.is-context.is-selected {
+  opacity: 1;
+  border-color: var(--type);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--type) 32%, transparent);
 }
 .ddag-node.is-dimmed {
   opacity: 0.25;

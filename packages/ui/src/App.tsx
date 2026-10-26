@@ -3,7 +3,7 @@ import type { DataformNode, NodeType } from "@dataform-dag/core";
 import type { CompilationStatus, HostBridge } from "./HostBridge.js";
 import { useHostBridge } from "./useHostBridge.js";
 import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf } from "./graphToFlow.js";
-import { filterGraphByTags, restrictGraph, tagCounts } from "./filterGraph.js";
+import { filterGraphWithContext, restrictGraph, tagCounts } from "./filterGraph.js";
 import { lineageOf } from "./lineage.js";
 import { collapseAssertions, isClusterId, type CollapsedGraph } from "./collapseAssertions.js";
 import { useLayout } from "./useLayout.js";
@@ -42,6 +42,8 @@ export function App({ bridge }: AppProps): JSX.Element {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [groupAssertions, setGroupAssertions] = useState(true);
+  /** With a tag filter on, also show each match's direct neighbors (as context). */
+  const [showContext, setShowContext] = useState(false);
   /** Focus mode: the real node ids whose lineage is all that's shown (several for a cluster). */
   const [lineage, setLineage] = useState<string[] | null>(null);
   /** Hops each way from the focused node(s); null shows the whole lineage. */
@@ -56,10 +58,12 @@ export function App({ bridge }: AppProps): JSX.Element {
   }, [savedTagFilter]);
 
   const tags = useMemo(() => (graph ? tagCounts(graph) : NO_TAGS), [graph]);
-  const visibleGraph = useMemo(
-    () => (graph ? filterGraphByTags(graph, selectedTags) : null),
-    [graph, selectedTags],
+  const tagFiltered = useMemo(
+    () => (graph ? filterGraphWithContext(graph, selectedTags, showContext) : null),
+    [graph, selectedTags, showContext],
   );
+  const visibleGraph = tagFiltered?.graph ?? null;
+  const context = tagFiltered?.context ?? NO_CONTEXT;
   // Focus mode narrows the tag-filtered graph further, to the focused node's lineage. It is computed
   // on what the tag filter left, so a root the filter hides means focus has nothing to show — the
   // effect below then leaves focus mode rather than drawing an empty canvas.
@@ -178,6 +182,14 @@ export function App({ bridge }: AppProps): JSX.Element {
       lineage && focused ? [...new Set(lineage.map((id) => collapsed?.clusterOf.get(id) ?? id))] : NO_IDS,
     [lineage, focused, collapsed],
   );
+  /** Canvas nodes drawn as context: a cluster only when every assertion in it is context. */
+  const contextIds = useMemo(() => {
+    if (context.size === 0 || !collapsed) return NO_IDS;
+    return collapsed.graph.nodes
+      .filter((n) => (collapsed.members.get(n.id)?.map((m) => m.id) ?? [n.id]).every((id) => context.has(id)))
+      .map((n) => n.id);
+  }, [context, collapsed]);
+
   const isFocusRoot = (ids: string[]): boolean =>
     !!lineage && lineage.length === ids.length && ids.every((id) => lineage.includes(id));
 
@@ -276,7 +288,13 @@ export function App({ bridge }: AppProps): JSX.Element {
           )}
         </div>
       </header>
-      <ActiveTags selectedTags={selectedTags} onChange={changeTags} />
+      <ActiveTags
+        selectedTags={selectedTags}
+        onChange={changeTags}
+        showContext={showContext}
+        onShowContextChange={setShowContext}
+        contextCount={context.size}
+      />
       {lineage && focused && (
         <FocusBar
           label={lineage.length > 1 ? `${lineage.length} assertions` : lineage[0]!}
@@ -299,7 +317,8 @@ export function App({ bridge }: AppProps): JSX.Element {
               onSelectNode={select}
               onFocusNode={focusOn}
               rootIds={rootIds}
-              fitKey={`${selectedTags.join("\u0000")}|${groupAssertions}|${
+              contextIds={contextIds}
+              fitKey={`${selectedTags.join("\u0000")}|${showContext}|${groupAssertions}|${
                 focused ? lineage!.join("\u0000") : ""
               }|${lineageDepth}`}
             />
@@ -355,6 +374,7 @@ const NO_MEMBERS: CollapsedGraph["members"] = new Map();
 const NO_CLUSTERS: CollapsedGraph["clusterOf"] = new Map();
 const NO_TAGS = new Map<string, number>();
 const NO_IDS: string[] = [];
+const NO_CONTEXT: ReadonlySet<string> = new Set();
 
 const STATUS_LABEL: Record<CompilationStatus, string> = {
   idle: "",

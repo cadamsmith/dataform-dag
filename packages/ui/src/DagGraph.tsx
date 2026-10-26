@@ -35,6 +35,8 @@ export interface DagGraphProps {
   onFocusNode?: (nodeId: string) => void;
   /** The focused node(s) while in focus mode, drawn as the anchor of the lineage. */
   rootIds?: string[];
+  /** Nodes shown only as neighbors of a tag match, drawn dashed and faded. */
+  contextIds?: string[];
   /**
    * Changes when the user changes what's shown (tag filter, grouping). The next layout that lands
    * after a change is fitted to the view; any other relayout (a recompile) keeps the view anchored.
@@ -50,6 +52,8 @@ type ModelNodeData = {
   dimmed: boolean;
   /** The anchor of focus mode. */
   root: boolean;
+  /** Shown as a neighbor of the tag filter's matches, not as a match. */
+  context: boolean;
   /** Set when this node stands for several collapsed ones — see `collapseAssertions`. */
   count?: number;
 };
@@ -62,9 +66,13 @@ type ModelNode = Node<ModelNodeData, "model">;
 const ModelNode = memo(function ModelNode({ data }: NodeProps<ModelNode>) {
   const cls = `ddag-node${data.selected ? " is-selected" : ""}${data.dimmed ? " is-dimmed" : ""}${
     data.count ? " is-cluster" : ""
-  }${data.root ? " is-root" : ""}`;
+  }${data.root ? " is-root" : ""}${data.context ? " is-context" : ""}`;
   return (
-    <div className={cls} style={{ ["--type" as string]: data.color }}>
+    <div
+      className={cls}
+      style={{ ["--type" as string]: data.color }}
+      title={data.context ? "Not tagged with the filter: shown as a neighbor of a match" : undefined}
+    >
       <Handle type="target" position={Position.Left} className="ddag-node__port" />
       <span className="ddag-node__tab">
         <TypeIcon type={data.nodeType} />
@@ -189,6 +197,7 @@ function DagCanvas({
   onSelectNode,
   onFocusNode,
   rootIds = NO_ROOTS,
+  contextIds = NO_ROOTS,
   fitKey = "",
 }: DagGraphProps): JSX.Element {
   // useNodesState/useEdgesState (not raw controlled props): controlled `nodes=` without an
@@ -197,6 +206,7 @@ function DagCanvas({
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const roots = useMemo(() => new Set(rootIds), [rootIds]);
+  const contextSet = useMemo(() => new Set(contextIds), [contextIds]);
   // The node whose relationships we emphasize: hover wins over selection so you can trace by pointing.
   // A selected focus root doesn't dim anything: in focus mode everything on screen IS its lineage,
   // and dimming all but its direct neighbors would grey out the rest of what you asked to see.
@@ -244,6 +254,7 @@ function DagCanvas({
           selected: false,
           dimmed: false,
           root: false,
+          context: false,
         },
       })),
     );
@@ -292,7 +303,10 @@ function DagCanvas({
     // Only the graph drives this; the callbacks are stable and fitKey/selection are read via refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, setNodes, setEdges]);
-  // Re-derive emphasis (selection ring + focus dimming) without disturbing positions.
+  // Re-derive emphasis (selection ring, dimming, focus root, context) without disturbing positions.
+  // `graph` is a dependency too: the build effect above resets every flag when a layout lands, and
+  // layouts land asynchronously, AFTER the render that changed the selection/root/context sets —
+  // without it, emphasis applied to the old nodes would be wiped and never reapplied.
   useEffect(() => {
     setNodes((nds) =>
       nds.map((n) => ({
@@ -302,6 +316,7 @@ function DagCanvas({
           selected: n.id === selectedId,
           dimmed: activeNodes != null && !activeNodes.has(n.id),
           root: roots.has(n.id),
+          context: contextSet.has(n.id),
         },
       })),
     );
@@ -320,7 +335,7 @@ function DagCanvas({
         };
       }),
     );
-  }, [selectedId, activeEdges, activeNodes, roots, setNodes, setEdges]);
+  }, [graph, selectedId, activeEdges, activeNodes, roots, contextSet, setNodes, setEdges]);
   // Each jump pans once. Re-panning on every relayout would undo the fit/anchor above; a jump whose
   // node isn't laid out yet (a filter just changed) waits for the layout that has it.
   const jumped = useRef(0);

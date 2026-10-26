@@ -8,10 +8,15 @@ import type { DagGraphProps } from "../src/DagGraph.js";
 // (capability gating, selection → detail panel), not the canvas. The stub exposes a select button
 // per node so we can drive selection deterministically.
 vi.mock("../src/DagGraph.js", () => ({
-  DagGraph: ({ graph, onSelectNode, onFocusNode }: DagGraphProps) => (
+  DagGraph: ({ graph, onSelectNode, onFocusNode, contextIds }: DagGraphProps) => (
     <div data-testid="canvas">
       {graph.nodes.map((n) => (
-        <button key={n.id} type="button" onClick={() => onSelectNode(n.id)}>
+        <button
+          key={n.id}
+          type="button"
+          data-context={contextIds?.includes(n.id) ? "true" : undefined}
+          onClick={() => onSelectNode(n.id)}
+        >
           {`select:${n.id}`}
         </button>
       ))}
@@ -143,6 +148,24 @@ describe("tag filter", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Remove tag core" }));
     expect(await screen.findByText("2 nodes")).toBeInTheDocument();
     expect(bridge.sent).toContainEqual({ type: "setTagFilter", selectedTags: [] });
+  });
+
+  it("shows a match's neighbors as context when asked, and only while a tag is selected", async () => {
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    expect(screen.queryByRole("button", { name: /Show neighbors/ })).toBeNull();
+
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["core"] }));
+    await screen.findByText("1 of 2 nodes");
+    await userEvent.click(screen.getByRole("button", { name: /Show neighbors/ }));
+
+    // src isn't tagged core but feeds mid, so it comes back, marked as context.
+    expect(await screen.findByText("2 nodes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Show neighbors/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("+1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "select:src" })).toHaveAttribute("data-context", "true");
+    expect(screen.getByRole("button", { name: "select:mid" })).not.toHaveAttribute("data-context");
   });
 
   it("restores a filter the host persisted", async () => {
