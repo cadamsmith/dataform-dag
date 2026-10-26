@@ -168,10 +168,13 @@ function normalizeFilePath(filePath: string): string {
 }
 
 /**
- * Find the compiled action a `.sqlx` produced. One file can yield SEVERAL actions — a table plus the
- * assertions Dataform generates from inline `config.assertions` — so `nodeId` disambiguates when the
- * caller knows which node it wants; without it the first match wins, which is the table rather than
- * a generated assertion because {@link graphFromCompileOutput} collects tables first.
+ * Find the compiled action a file produced. One file can yield SEVERAL actions — a table plus the
+ * assertions Dataform generates from inline `config.assertions`, or anything a `.js` file publishes,
+ * declares, or asserts — so `nodeId` picks the one the caller means. A `nodeId` that names none of
+ * them finds nothing: falling back to a sibling would show another action's SQL under this node.
+ * Without `nodeId` the first match wins, which is a table rather than a generated assertion because
+ * tables are searched first. Declarations are searched last; they carry no SQL, so finding one
+ * reads as "compiles to no SQL" rather than as a missing action.
  */
 export function findCompiledActionByFile(
   output: CompileOutput,
@@ -183,18 +186,16 @@ export function findCompiledActionByFile(
     ...(output.tables ?? []),
     ...(output.operations ?? []),
     ...(output.assertions ?? []),
+    ...(output.declarations ?? []),
   ].filter((a) => a.fileName !== undefined && normalizeFilePath(a.fileName) === wanted);
-  if (nodeId) {
-    // A node id is the bare name or, for a colliding name, a qualified one; see `nodeIdResolver`.
-    const exact = matches.find(
-      ({ target: t }) =>
-        nodeId === t.name ||
-        nodeId === schemaQualified(t) ||
-        nodeId === [t.database, t.schema, t.name].filter(Boolean).join("."),
-    );
-    if (exact) return exact;
-  }
-  return matches[0];
+  if (!nodeId) return matches[0];
+  // A node id is the bare name or, for a colliding name, a qualified one; see `nodeIdResolver`.
+  return matches.find(
+    ({ target: t }) =>
+      nodeId === t.name ||
+      nodeId === schemaQualified(t) ||
+      nodeId === [t.database, t.schema, t.name].filter(Boolean).join("."),
+  );
 }
 
 const execFileAsync = promisify(execFile);

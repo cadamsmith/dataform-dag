@@ -108,10 +108,27 @@ describe("findCompiledActionByFile", () => {
     expect(found?.target.schema).toBe("b");
   });
 
-  it("falls back to the first match when the target name is unknown", () => {
-    expect(findCompiledActionByFile(output, "definitions/orders.sqlx", "nope")?.target.name).toBe(
-      "orders",
-    );
+  it("finds nothing when the node id names none of the file's actions", () => {
+    // Falling back to a sibling would show another action's SQL under this node.
+    expect(findCompiledActionByFile(output, "definitions/orders.sqlx", "nope")).toBeUndefined();
+  });
+
+  it("resolves a declaration in a .js file to itself, not to a sibling it publishes", () => {
+    const js: CompileOutput = {
+      tables: [
+        action({
+          target: { name: "rollup" },
+          fileName: "definitions/feed.js",
+          query: "select * from raw_feed",
+        }),
+      ],
+      declarations: [action({ target: { name: "raw_feed" }, fileName: "definitions/feed.js" })],
+    };
+    const found = findCompiledActionByFile(js, "definitions/feed.js", "raw_feed");
+    expect(found?.target.name).toBe("raw_feed");
+    expect(compiledSqlSections(found!)).toEqual([]);
+    // Without a node id the table still wins over the declaration.
+    expect(findCompiledActionByFile(js, "definitions/feed.js")?.target.name).toBe("rollup");
   });
 
   it("matches across separator and leading-./ differences", () => {
