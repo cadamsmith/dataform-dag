@@ -2,8 +2,8 @@
 
 Interactive DAG viewer for a Dataform project's dependency graph — parsed locally from `.sqlx`
 files, no warehouse connection and no cloud. Point it at any local Dataform project (one with a
-`definitions/**/*.sqlx` tree). Ships as **one shared core + one shared UI behind two hosts**: a
-VS Code extension and a standalone local web app.
+`definitions/**/*.sqlx` tree). Ships as a VS Code extension built
+on **one shared core + one shared UI**.
 
 <img alt="The DAG canvas in VS Code" src="https://github.com/user-attachments/assets/3d1dfb01-788e-4384-9f75-b36057dc909a" />
 
@@ -28,9 +28,8 @@ VS Code extension and a standalone local web app.
   higher-fidelity graph, plus a **Dataform DAG: Show Compiled SQL** command. Falls back to the
   parsed graph if the CLI is missing or the project doesn't compile.
 
-The two hosts run the same UI over a `HostBridge` seam, and the UI turns features on from the
-capabilities the host advertises — the extension enables all of them, the browser host is
-read-only (no file opening, watching, or compiling from a web page).
+The UI talks to its host only over a `HostBridge` seam, and turns features on from the
+capabilities the host advertises — the extension enables all of them.
 
 ## Layout
 
@@ -40,8 +39,7 @@ dataform-dag/
 │   ├── core/   # pure TS: .sqlx parser + graph builder + graph sources (regex | compile)
 │   └── ui/     # host-agnostic React Flow canvas + node detail, talks only via HostBridge
 ├── apps/
-│   ├── extension/  # VS Code host — webview + FileSystemWatcher, HostBridge over postMessage
-│   └── web/        # browser host — File System Access API, HostBridge in-page
+│   └── extension/  # VS Code host — webview + FileSystemWatcher, HostBridge over postMessage
 └── examples/
     └── starlog/    # a small runnable Dataform project to click through by hand
 ```
@@ -53,15 +51,12 @@ npm install          # from the repo root (npm workspaces)
 npm run build:core   # everything else depends on core's build output — run this first
 ```
 
-Then pick a host:
+Then:
 
 ```bash
-# VS Code extension: open apps/extension in VS Code, press F5, and run
-# "Dataform DAG: Show Graph" in the Extension Development Host (see apps/extension/README.md).
-# Point it at examples/starlog for a project that's already set up.
-
-npm run dev -w @dataform-dag/web   # browser host → open the URL, pick a Dataform folder
-                                   # (Chromium only — needs the File System Access API)
+# VS Code extension: open the repo root in VS Code, build with `npm run watch -w dataform-dag`,
+# press F5, and run "Dataform DAG: Show Graph" in the Extension Development Host (see
+# apps/extension/README.md). It opens examples/starlog, a project that's already set up.
 
 npm run dev:ui                     # the shared UI alone, against a mock 18-node graph
 ```
@@ -75,7 +70,7 @@ The core exposes a `GraphSource` seam so the *same* `DataformGraph` can be produ
 - **`CompiledGraphSource`** (opt-in, Node only) — shells out to `dataform compile --json` and maps
   the resolved graph. Higher fidelity (catches inline `config.assertions`, object-form refs, refs
   built in JS blocks) at the cost of requiring the CLI and a compiling project. The extension
-  exposes this as the in-canvas mode toggle; the web host can't run a CLI, so it's parser-only.
+  exposes this as the in-canvas mode toggle.
 
 Both key nodes by **target name** (`config.name ?? filename`), so their output is interchangeable.
 
@@ -88,7 +83,7 @@ are not). Both are covered by tests so they stay documented boundaries, not surp
 
 ```bash
 npm run typecheck
-npm test             # all workspaces (core + ui + both hosts)
+npm test             # all workspaces (core + ui + extension)
 ```
 
 `CLAUDE.md` has the invariants worth not regressing; `ROADMAP.md` has what's still open.

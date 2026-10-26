@@ -10,16 +10,14 @@ Anything not listed here is either done (`git log`) or deliberately out of scope
   tagged GitHub Release — but there are no tags yet and the one-time setup in
   `.github/workflows/PUBLISHING.md` (two repo secrets, a registered publisher on each registry)
   hasn't been done. That setup is credentialed and has to be the user's step.
-- **Human smoke test.** Everything a machine can check is green (169 tests, typecheck, both hosts
-  build, `.vsix` packages). Nobody has confirmed with their eyes that (a) the packaged `.vsix`
+- **Human smoke test.** Everything a machine can check is green (tests, typecheck, the extension
+  builds, `.vsix` packages). Nobody has confirmed with their eyes that (a) the packaged `.vsix`
   installs into a real VS Code and renders, (b) the activity-bar icon shows up and its tree opens
-  files and reflects rebuilds, or (c) the web host renders in Chrome/Edge after picking a folder.
+  files and reflects rebuilds.
   Until then "renders correctly" is inferred from build success, not observed.
 - **Tree view: reveal the active editor's node.** The canvas highlights the node for the active
   editor; the tree doesn't. `TreeView.reveal()` needs `DagTreeProvider.getParent()` plus stable
   `TreeItem.id`s, since the provider rebuilds its entries on every `getChildren`.
-- **Web host: let the user re-pick the project folder.** `apps/web/src/main.tsx` gates once on a
-  directory pick and never offers a way back — switching projects means reloading the page.
 - **UI: collapse-by-layer.** Search, tag filtering, the SQL preview, and assertion grouping shipped;
   collapsing a whole layer/tag group did not.
 - **Expand a cluster in place on the canvas.** Grouped assertions are listed in the detail panel,

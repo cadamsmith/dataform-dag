@@ -1,6 +1,6 @@
 /**
  * Browser-safe surface of the core. Re-exports only the pure parser + graph pieces — nothing here
- * pulls `node:fs` or `node:child_process`, so it bundles (and tree-shakes) cleanly for the web host.
+ * pulls `node:fs` or `node:child_process`, so it bundles (and tree-shakes) cleanly for a browser bundle.
  * The Node-only sources (`NodeFileSource`, `CompiledGraphSource`, `buildGraphFromWorkspace`) live
  * behind the package's main entry and are deliberately absent; a browser host supplies its own
  * {@link FileSource} and drives `parseSqlx` + `buildGraph` itself.

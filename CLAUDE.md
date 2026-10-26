@@ -7,9 +7,9 @@ Constraints and hard-won invariants for this repo. See `README.md` for what the 
 
 ```bash
 npm install
-npm run build:core   # ui + both hosts depend on core's build output/types — run this first
+npm run build:core   # ui + the extension depend on core's build output/types — run this first
 npm run typecheck
-npm test             # all workspaces (core + ui + extension + web)
+npm test             # all workspaces (core + ui + extension)
 npm run dev:ui       # shared UI standalone against a mock graph
 ```
 
@@ -32,10 +32,9 @@ npm run dev:ui       # shared UI standalone against a mock graph
   a group with no upstream is never collapsed because the filter strips refs to dropped nodes.
 - **`@dataform-dag/core/browser` is the browser-safe entry** (parser + graph only). The main barrel
   (`.`) re-exports `NodeFileSource` (`node:fs`) and `CompiledGraphSource` (`node:child_process`),
-  which break a browser bundle. The web host imports from `/browser`. Don't route browser code
-  through `.`.
+  which break a browser bundle. Don't route browser code through `.`.
 - **`packages/ui` imports `@dataform-dag/core` for TYPES ONLY** (`import type`). That's what keeps
-  core's Node-only modules out of both UI bundles. Don't add a value import from core to the UI.
+  core's Node-only modules out of the webview bundle. Don't add a value import from core to the UI.
 - **Node identity = target name** (`config.name ?? basename`), not filename. Both graph sources key
   on it so their outputs are interchangeable. (A file can rename itself — e.g. a declaration.)
 - **React Flow nodes are locked** (`nodesDraggable={false}`); the ELK layout is authoritative.
@@ -46,6 +45,3 @@ npm run dev:ui       # shared UI standalone against a mock graph
   — the extra 8 are inline `config.assertions` that Dataform synthesizes. This is the documented
   tier boundary, pinned by a golden `compile --json` fixture in `packages/core/test`, NOT a bug to
   "fix" in the regex parser.
-- **The web host is local-only, by choice.** It's a static bundle run locally (`npm run dev -w
-  @dataform-dag/web`) that exists for local use and as the standalone proving ground for the shared
-  UI. Don't wire up GitHub Pages / Vercel / Netlify or any other hosting.
