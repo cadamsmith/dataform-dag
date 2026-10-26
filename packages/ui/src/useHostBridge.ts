@@ -10,6 +10,8 @@ export interface HostBridgeState {
   graph: SerializedGraph | null;
   /** The node the host last asked to focus (e.g. active editor changed). Cleared after consumption. */
   focusRequest: { nodeId: string; nonce: number } | null;
+  /** The node the host last asked to enter focus mode on, nonce'd like `focusRequest`. */
+  lineageRequest: { nodeId: string; nonce: number } | null;
   compilationStatus: CompilationStatus;
   /** Detail for an `error` / `cli-missing` status (the compiler's message), else null. */
   compilationMessage: string | null;
@@ -27,6 +29,7 @@ export interface HostBridgeState {
 export function useHostBridge(bridge: HostBridge): HostBridgeState {
   const [graph, setGraph] = useState<SerializedGraph | null>(null);
   const [focusRequest, setFocusRequest] = useState<HostBridgeState["focusRequest"]>(null);
+  const [lineageRequest, setLineageRequest] = useState<HostBridgeState["lineageRequest"]>(null);
   const [compilationStatus, setCompilationStatus] = useState<CompilationStatus>("idle");
   const [compilationMessage, setCompilationMessage] = useState<string | null>(null);
   const [compiledSql, setCompiledSql] = useState<HostBridgeState["compiledSql"]>(null);
@@ -38,6 +41,8 @@ export function useHostBridge(bridge: HostBridge): HostBridgeState {
     const unsubscribe = bridge.onMessage((msg) => {
       if (msg.type === "graphUpdate") setGraph(msg.graph);
       else if (msg.type === "focusNode") setFocusRequest({ nodeId: msg.nodeId, nonce: ++nonce });
+      else if (msg.type === "focusLineage")
+        setLineageRequest({ nodeId: msg.nodeId, nonce: ++nonce });
       else if (msg.type === "compilationStatus") {
         setCompilationStatus(msg.status);
         setCompilationMessage(msg.message ?? null);
@@ -61,6 +66,7 @@ export function useHostBridge(bridge: HostBridge): HostBridgeState {
   return {
     graph,
     focusRequest,
+    lineageRequest,
     compilationStatus,
     compilationMessage,
     compiledSql,

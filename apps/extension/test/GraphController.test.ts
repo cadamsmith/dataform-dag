@@ -113,6 +113,7 @@ describe("activate", () => {
   it("registers every contributed command", () => {
     activateAndShow();
     expect([...records.commands.keys()].sort()).toEqual([
+      "dataformDag.focusInGraph",
       "dataformDag.groupByFolder",
       "dataformDag.groupByType",
       "dataformDag.refresh",
@@ -125,9 +126,9 @@ describe("activate", () => {
   it("registers the activity-bar tree view and disposes everything it owns", () => {
     const context = activateAndShow();
     expect(lastTreeView().id).toBe("dataformDag.nodes");
-    // 6 commands + the tree view + its status subscription + the tree provider + the controller +
+    // 7 commands + the tree view + its status subscription + the tree provider + the controller +
     // the store
-    expect(context.subscriptions).toHaveLength(11);
+    expect(context.subscriptions).toHaveLength(12);
   });
 
   it("toggles the tree grouping, persisting it and updating the title-bar context", () => {
@@ -631,6 +632,31 @@ describe("tree view commands", () => {
 
     expect(records.shownDocs.at(-1)!.uri.fsPath).toBe("/proj/a.sqlx");
     expect(postedOfType("focusNode").at(-1)).toEqual({ type: "focusNode", nodeId: "a" });
+  });
+
+  it("Focus in Graph opens the panel and enters focus mode only once the webview is ready", async () => {
+    activate(fakeContext() as never);
+
+    records.commands.get("dataformDag.focusInGraph")!(entry);
+
+    // A fresh webview drops messages posted before its script loads, so nothing goes out yet.
+    expect(window.createWebviewPanel).toHaveBeenCalledTimes(1);
+    expect(postedOfType("focusLineage")).toEqual([]);
+
+    lastPanel().webview.emitMessage({ type: "ready" });
+    expect(postedOfType("focusLineage")).toEqual([{ type: "focusLineage", nodeId: "a" }]);
+    // Delivered once, not again on a later ready.
+    lastPanel().webview.emitMessage({ type: "ready" });
+    expect(postedOfType("focusLineage")).toHaveLength(1);
+  });
+
+  it("Focus in Graph posts at once when the panel is already up", async () => {
+    activateAndShow();
+    lastPanel().webview.emitMessage({ type: "ready" });
+
+    records.commands.get("dataformDag.focusInGraph")!(entry);
+
+    expect(postedOfType("focusLineage")).toEqual([{ type: "focusLineage", nodeId: "a" }]);
   });
 
   it("opens the file without forcing the panel open when only the tree is in use", () => {

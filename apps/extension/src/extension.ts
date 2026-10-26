@@ -7,6 +7,7 @@ const COMMAND_SHOW_GRAPH = "dataformDag.showGraph";
 const COMMAND_SHOW_COMPILED_SQL = "dataformDag.showCompiledSql";
 const COMMAND_REFRESH = "dataformDag.refresh";
 const COMMAND_REVEAL_NODE = "dataformDag.revealNode";
+const COMMAND_FOCUS_IN_GRAPH = "dataformDag.focusInGraph";
 const COMMAND_GROUP_BY_FOLDER = "dataformDag.groupByFolder";
 const COMMAND_GROUP_BY_TYPE = "dataformDag.groupByType";
 const VIEW_NODES = "dataformDag.nodes";
@@ -33,6 +34,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_REFRESH, () => void store.recompile()),
     vscode.commands.registerCommand(COMMAND_REVEAL_NODE, (arg?: unknown) =>
       controller.revealNode(nodeOf(arg)),
+    ),
+    vscode.commands.registerCommand(COMMAND_FOCUS_IN_GRAPH, (arg?: unknown) =>
+      controller.focusLineage(nodeOf(arg)),
     ),
     vscode.commands.registerCommand(COMMAND_GROUP_BY_FOLDER, () => setGrouping("folder")),
     vscode.commands.registerCommand(COMMAND_GROUP_BY_TYPE, () => setGrouping("type")),
@@ -82,6 +86,10 @@ class GraphController implements vscode.Disposable {
   private readonly panelDisposables: vscode.Disposable[] = [];
   private readonly storeSubscriptions: vscode.Disposable[] = [];
   private selectedTags: string[] = [];
+  /** The webview has loaded and said `ready`; until then, posted messages are dropped. */
+  private ready = false;
+  /** A focus-mode request made before the webview was ready, delivered on `ready`. */
+  private pendingLineage: string | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -132,6 +140,7 @@ class GraphController implements vscode.Disposable {
   private onMessage(msg: OutboundMsg): void {
     switch (msg.type) {
       case "ready":
+        this.ready = true;
         this.selectedTags = this.readSavedTagFilter();
         // Send the restored filter ONCE, on connect. Echoing it after each `setTagFilter` would
         // fight the user's own clicks in the UI.
@@ -140,6 +149,10 @@ class GraphController implements vscode.Disposable {
         // now, then build — a cache hit just re-publishes, a past failure gets retried.
         if (this.store.current) this.post({ type: "graphUpdate", graph: this.store.current });
         this.post({ type: "compilationStatus", ...this.store.compilation });
+        if (this.pendingLineage) {
+          this.post({ type: "focusLineage", nodeId: this.pendingLineage });
+          this.pendingLineage = undefined;
+        }
         void this.build();
         return;
       case "requestRefresh":
@@ -191,6 +204,18 @@ class GraphController implements vscode.Disposable {
       preview: false,
     });
     this.post({ type: "focusNode", nodeId: node.id });
+  }
+
+  /**
+   * The tree's "Focus in Graph": open the canvas showing only this node's lineage. Opening the panel
+   * is the common case here, and a new webview drops anything posted before its script loads, so the
+   * request waits for `ready` when the panel isn't up yet.
+   */
+  focusLineage(node: { id: string; filePath: string } | undefined): void {
+    if (!node) return;
+    this.show();
+    if (this.ready) this.post({ type: "focusLineage", nodeId: node.id });
+    else this.pendingLineage = node.id;
   }
 
   /**
@@ -282,6 +307,8 @@ class GraphController implements vscode.Disposable {
 
   private closePanel(): void {
     this.panel = undefined;
+    this.ready = false;
+    this.pendingLineage = undefined;
     for (const d of this.panelDisposables.splice(0)) d.dispose();
   }
 

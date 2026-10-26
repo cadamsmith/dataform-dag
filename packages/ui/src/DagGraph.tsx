@@ -1,11 +1,11 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   BaseEdge,
   Background,
+  BackgroundVariant,
   Controls,
   getBezierPath,
   Handle,
-  MarkerType,
   MiniMap,
   Position,
   ReactFlow,
@@ -13,6 +13,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useStoreApi,
   type Edge,
   type EdgeProps,
   type Node,
@@ -20,7 +21,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { NodeType } from "@dataform-dag/core";
-import type { FlowGraph, Point } from "./graphToFlow.js";
+import type { FlowGraph, FlowNode, Point } from "./graphToFlow.js";
+import { TypeIcon } from "./TypeIcon.js";
 
 export interface DagGraphProps {
   graph: FlowGraph;
@@ -29,6 +31,15 @@ export interface DagGraphProps {
   focus: { nodeId: string; nonce: number } | null;
   /** A node id to select, or null to clear the selection (e.g. clicking empty canvas). */
   onSelectNode: (nodeId: string | null) => void;
+  /** Double-click: enter focus mode on this canvas node (a real id or a cluster id). */
+  onFocusNode?: (nodeId: string) => void;
+  /** The focused node(s) while in focus mode, drawn as the anchor of the lineage. */
+  rootIds?: string[];
+  /**
+   * Changes when the user changes what's shown (tag filter, grouping). The next layout that lands
+   * after a change is fitted to the view; any other relayout (a recompile) keeps the view anchored.
+   */
+  fitKey?: string;
 }
 
 type ModelNodeData = {
@@ -37,23 +48,33 @@ type ModelNodeData = {
   nodeType: NodeType;
   selected: boolean;
   dimmed: boolean;
+  /** The anchor of focus mode. */
+  root: boolean;
   /** Set when this node stands for several collapsed ones — see `collapseAssertions`. */
   count?: number;
 };
 type ModelNode = Node<ModelNodeData, "model">;
 
-/** A model as a card: type-colored left accent, monospace name, type label. Sized by its label. */
+/**
+ * A model as a card: a type tab with the type's glyph, then the monospace name over the type. Sized
+ * by its label (see `nodeWidth`).
+ */
 const ModelNode = memo(function ModelNode({ data }: NodeProps<ModelNode>) {
   const cls = `ddag-node${data.selected ? " is-selected" : ""}${data.dimmed ? " is-dimmed" : ""}${
     data.count ? " is-cluster" : ""
-  }`;
+  }${data.root ? " is-root" : ""}`;
   return (
-    <div className={cls} style={{ ["--accent" as string]: data.color }}>
-      <Handle type="target" position={Position.Left} className="ddag-node__handle" />
-      <span className="ddag-node__label">{data.label}</span>
-      {/* A cluster's own label already names the type, so the sub-label says what it IS instead. */}
-      <span className="ddag-node__type">{data.count ? "grouped — click to list" : data.nodeType}</span>
-      <Handle type="source" position={Position.Right} className="ddag-node__handle" />
+    <div className={cls} style={{ ["--type" as string]: data.color }}>
+      <Handle type="target" position={Position.Left} className="ddag-node__port" />
+      <span className="ddag-node__tab">
+        <TypeIcon type={data.nodeType} />
+      </span>
+      <span className="ddag-node__text">
+        <span className="ddag-node__label">{data.label}</span>
+        {/* A cluster's own label already names the type, so the sub-label says what it IS instead. */}
+        <span className="ddag-node__type">{data.count ? "grouped" : data.nodeType}</span>
+      </span>
+      <Handle type="source" position={Position.Right} className="ddag-node__port" />
     </div>
   );
 });
@@ -106,10 +127,51 @@ const ElkEdge = memo(function ElkEdge(props: EdgeProps) {
       targetPosition: props.targetPosition,
     });
   }
-  return <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} style={props.style} />;
+  // Arrowheads come from the <defs> in EdgeMarkers rather than React Flow's markers: those are keyed
+  // by color string, and these colors are CSS variables that follow the editor theme.
+  const active = (props.data as { active?: boolean } | undefined)?.active;
+  return (
+    <BaseEdge
+      id={props.id}
+      path={path}
+      markerEnd={active ? "url(#ddag-arrow-active)" : "url(#ddag-arrow)"}
+      style={props.style}
+    />
+  );
 });
 
 const edgeTypes = { elk: ElkEdge };
+
+function EdgeMarkers(): JSX.Element {
+  return (
+    <svg className="ddag-markers" aria-hidden="true">
+      <defs>
+        {(["ddag-arrow", "ddag-arrow-active"] as const).map((id) => (
+          <marker
+            key={id}
+            id={id}
+            viewBox="-6 -5 8 10"
+            markerWidth="8"
+            markerHeight="10"
+            orient="auto-start-reverse"
+            markerUnits="userSpaceOnUse"
+          >
+            <path d="M-5,-4 L1,0 L-5,4 z" className={`${id}__head`} />
+          </marker>
+        ))}
+      </defs>
+    </svg>
+  );
+}
+
+const NO_ROOTS: string[] = [];
+
+/** Framing for every fit. The zoom cap keeps a filter down to two nodes from blowing them up 2×. */
+const FIT = { padding: 0.2, maxZoom: 1.25 };
+
+/** Should the viewer's motion preference allow the animated fit after a filter change? */
+const prefersReducedMotion = (): boolean =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** React Flow canvas. Owns only rendering + focus; all graph shape comes from {@link FlowGraph}. */
 export function DagGraph(props: DagGraphProps): JSX.Element {
@@ -120,14 +182,25 @@ export function DagGraph(props: DagGraphProps): JSX.Element {
   );
 }
 
-function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): JSX.Element {
+function DagCanvas({
+  graph,
+  selectedId,
+  focus,
+  onSelectNode,
+  onFocusNode,
+  rootIds = NO_ROOTS,
+  fitKey = "",
+}: DagGraphProps): JSX.Element {
   // useNodesState/useEdgesState (not raw controlled props): controlled `nodes=` without an
   // onNodesChange handler renders them frozen (RF #002), even with dragging off.
   const [nodes, setNodes, onNodesChange] = useNodesState<ModelNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const roots = useMemo(() => new Set(rootIds), [rootIds]);
   // The node whose relationships we emphasize: hover wins over selection so you can trace by pointing.
-  const focusId = hoveredId ?? selectedId;
+  // A selected focus root doesn't dim anything: in focus mode everything on screen IS its lineage,
+  // and dimming all but its direct neighbors would grey out the rest of what you asked to see.
+  const focusId = hoveredId ?? (selectedId && !roots.has(selectedId) ? selectedId : null);
   // Edges touching the focused node, and the neighbor set to keep bright while the rest fade.
   const { activeEdges, activeNodes } = useMemo(() => {
     if (!focusId) return { activeEdges: null, activeNodes: null };
@@ -142,7 +215,19 @@ function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): J
     }
     return { activeEdges: e, activeNodes: n };
   }, [focusId, graph.edges]);
-  // Build nodes/edges whenever the graph (layout) changes.
+  const { fitView, getViewport, setViewport, setCenter } = useReactFlow();
+  const storeApi = useStoreApi();
+  // fitKey is read through a ref so a filter change arms the NEXT layout, which lands asynchronously.
+  const fitKeyRef = useRef(fitKey);
+  fitKeyRef.current = fitKey;
+  const fittedKey = useRef(fitKey);
+  const previous = useRef<FlowNode[] | null>(null);
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const [relayout, setRelayout] = useState(0);
+
+  // Build nodes/edges whenever the graph (layout) changes, then decide where the view goes: nodes
+  // move in a new layout, and leaving the viewport where it was is what made the graph "jump".
   useEffect(() => {
     setNodes(
       graph.nodes.map((n) => ({
@@ -158,6 +243,7 @@ function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): J
           count: n.data.count,
           selected: false,
           dimmed: false,
+          root: false,
         },
       })),
     );
@@ -170,6 +256,41 @@ function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): J
         data: { points: e.points },
       })),
     );
+
+    const before = previous.current;
+    previous.current = graph.nodes;
+    if (!before) return; // the first layout is fitted by <ReactFlow fitView>
+    setRelayout((n) => n + 1);
+    const duration = prefersReducedMotion() ? 0 : 380;
+
+    if (fittedKey.current !== fitKeyRef.current) {
+      // The user changed what's shown: frame the result. Deferred a frame so React Flow has the new
+      // nodes in its store before measuring bounds.
+      fittedKey.current = fitKeyRef.current;
+      requestAnimationFrame(() => void fitView({ ...FIT, duration }));
+      return;
+    }
+    // A recompile: hold the node you were looking at still on screen — the selection if it
+    // survived, else whichever surviving node was nearest the middle of the view.
+    const anchor = anchorBetween(before, graph.nodes, selectedRef.current, viewCenter());
+    if (!anchor) {
+      requestAnimationFrame(() => void fitView({ ...FIT, duration }));
+      return;
+    }
+    const { x, y, zoom } = getViewport();
+    void setViewport({
+      x: x - (anchor.after.x - anchor.before.x) * zoom,
+      y: y - (anchor.after.y - anchor.before.y) * zoom,
+      zoom,
+    });
+
+    function viewCenter(): { x: number; y: number } {
+      const { width, height } = storeApi.getState();
+      const v = getViewport();
+      return { x: (width / 2 - v.x) / v.zoom, y: (height / 2 - v.y) / v.zoom };
+    }
+    // Only the graph drives this; the callbacks are stable and fitKey/selection are read via refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, setNodes, setEdges]);
   // Re-derive emphasis (selection ring + focus dimming) without disturbing positions.
   useEffect(() => {
@@ -180,6 +301,7 @@ function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): J
           ...n.data,
           selected: n.id === selectedId,
           dimmed: activeNodes != null && !activeNodes.has(n.id),
+          root: roots.has(n.id),
         },
       })),
     );
@@ -189,55 +311,99 @@ function DagCanvas({ graph, selectedId, focus, onSelectNode }: DagGraphProps): J
         const faded = activeEdges != null && !active;
         return {
           ...e,
-          style: {
-            stroke: active ? "#334155" : "#c3ccd6",
-            strokeWidth: active ? 2 : 1.5,
-            opacity: faded ? 0.12 : 1,
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 15,
-            height: 15,
-            color: active ? "#334155" : "#c3ccd6",
-          },
+          // React Flow's own `animated` dash, running source → target: on hover it shows which
+          // way data moves through the node you're pointing at.
+          animated: active,
+          className: active ? "is-active" : faded ? "is-faded" : undefined,
+          data: { ...e.data, active },
           zIndex: active ? 10 : 0,
         };
       }),
     );
-  }, [selectedId, activeEdges, activeNodes, setNodes, setEdges]);
-  const { setCenter } = useReactFlow();
+  }, [selectedId, activeEdges, activeNodes, roots, setNodes, setEdges]);
+  // Each jump pans once. Re-panning on every relayout would undo the fit/anchor above; a jump whose
+  // node isn't laid out yet (a filter just changed) waits for the layout that has it.
+  const jumped = useRef(0);
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || focus.nonce === jumped.current) return;
     const target = graph.nodes.find((n) => n.id === focus.nodeId);
-    if (target) {
-      setCenter(target.position.x + target.width / 2, target.position.y + target.height / 2, {
-        zoom: 1.2,
-        duration: 400,
-      });
-    }
+    if (!target) return;
+    jumped.current = focus.nonce;
+    // Deferred a frame: selecting can open the detail panel in the same render, which narrows the
+    // canvas, and centering against the old width would leave the node under the panel.
+    const frame = requestAnimationFrame(() =>
+      void setCenter(target.position.x + target.width / 2, target.position.y + target.height / 2, {
+        zoom: Math.max(getViewport().zoom, 1),
+        duration: prefersReducedMotion() ? 0 : 400,
+      }),
+    );
+    return () => cancelAnimationFrame(frame);
   }, [focus, graph.nodes, setCenter]);
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={(_, node) => onSelectNode(node.id)}
-      onPaneClick={() => onSelectNode(null)}
-      onNodeMouseEnter={(_, node) => setHoveredId(node.id)}
-      onNodeMouseLeave={() => setHoveredId(null)}
-      nodesDraggable={false}
-      nodesConnectable={false}
-      minZoom={0.2}
-      fitView
-      fitViewOptions={{ padding: 0.2 }}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background color="#dbe1e8" gap={20} />
-      <Controls showInteractive={false} />
-      <MiniMap pannable zoomable nodeColor={(n) => (n.data as ModelNodeData).color} />
-    </ReactFlow>
+    // data-relayout flips on each relayout, and app.css gives each value its own (identical) fade
+    // keyframes, so the fade replays: new positions land in one frame, and a short fade reads as
+    // "re-arranged" rather than a teleport.
+    <div className="ddag-flow" data-relayout={relayout % 2}>
+      <EdgeMarkers />
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={(_, node) => onSelectNode(node.id)}
+        onNodeDoubleClick={(_, node) => onFocusNode?.(node.id)}
+        // Double-click on a node means "focus it"; zooming on it too would fight the fit that follows.
+        zoomOnDoubleClick={false}
+        onPaneClick={() => onSelectNode(null)}
+        onNodeMouseEnter={(_, node) => setHoveredId(node.id)}
+        onNodeMouseLeave={() => setHoveredId(null)}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        minZoom={0.2}
+        fitView
+        fitViewOptions={FIT}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} color="var(--ddag-grid)" gap={22} size={1.5} />
+        <Controls showInteractive={false} position="bottom-left" />
+        <MiniMap
+          pannable
+          zoomable
+          position="bottom-right"
+          nodeColor={(n) => (n.data as ModelNodeData).color}
+          nodeBorderRadius={4}
+          maskColor="var(--ddag-minimap-mask)"
+        />
+      </ReactFlow>
+    </div>
   );
+}
+
+/**
+ * The node to hold still across a relayout, with its position before and after. Prefers the
+ * selection; otherwise the surviving node closest to `center` (flow coordinates).
+ */
+export function anchorBetween(
+  before: FlowNode[],
+  after: FlowNode[],
+  selectedId: string | null,
+  center: { x: number; y: number },
+): { before: { x: number; y: number }; after: { x: number; y: number } } | null {
+  const now = new Map(after.map((n) => [n.id, n.position]));
+  const pick = (n: FlowNode) => ({ before: n.position, after: now.get(n.id)! });
+  const selected = selectedId ? before.find((n) => n.id === selectedId && now.has(n.id)) : undefined;
+  if (selected) return pick(selected);
+  let best: FlowNode | undefined;
+  let bestDist = Infinity;
+  for (const n of before) {
+    if (!now.has(n.id)) continue;
+    const d = Math.hypot(n.position.x + n.width / 2 - center.x, n.position.y + n.height / 2 - center.y);
+    if (d < bestDist) {
+      best = n;
+      bestDist = d;
+    }
+  }
+  return best ? pick(best) : null;
 }

@@ -18,6 +18,10 @@ including inline assertions and refs built in JavaScript.
   `tags` — the node count in the top bar tracks what's visible.
 - **Inspect a node.** Click one for its type, tags, file path, and upstream/downstream refs — and
   the SQL Dataform actually compiles it to.
+- **Focus on one node's lineage.** Double-click a node, press **Focus** in its detail panel, or click
+  the target icon on a row in the sidebar, and the canvas shows only that node plus everything
+  upstream and downstream of it. A stepper narrows it to 1, 2, 3… hops each way; Esc or
+  **Exit focus** brings the whole graph back.
 - **Browse from the sidebar.** The Dataform DAG icon in the activity bar lists every action in the
   project grouped by type — sources, tables, views, incrementals, assertions, operations — or, from
   the view's title bar, by the folder its file lives in, with each one's tags beside it. Click a row to open its file; the canvas follows along when it's open.

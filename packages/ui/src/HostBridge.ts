@@ -21,6 +21,8 @@ export type OutboundMsg =
 export type InboundMsg =
   | { type: "graphUpdate"; graph: SerializedGraph }
   | { type: "focusNode"; nodeId: string }
+  /** Enter focus mode on a node: show only its lineage. (`focusNode` above just pans to it.) */
+  | { type: "focusLineage"; nodeId: string }
   | { type: "compilationStatus"; status: CompilationStatus; message?: string }
   | { type: "compiledSqlResult"; nodeId: string; sections: CompiledSqlSection[] }
   | { type: "compiledSqlError"; nodeId: string; message: string }

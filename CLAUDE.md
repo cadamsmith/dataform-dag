@@ -32,11 +32,12 @@ npm run package -w dataform-dag  # build the .vsix
   and recompiles after a quiet period; any compile that finishes under an older generation must
   reach neither the cache nor a view. Failures go to the status pill / tree message, not a toast
   per save — the one toast is a missing CLI, once per session.
-- **Assertion clusters are UI-only, and the pipeline order is filter → collapse → layout**
-  (`packages/ui/src/collapseAssertions.ts`). A cluster id (`assertions:<parents>`) is synthetic: it
-  names no file and MUST never be sent to a host — `openFile`/`showCompiledSql` always carry a real
-  member node. Collapsing before the tag filter would describe assertions that aren't on screen, and
-  a group with no upstream is never collapsed because the filter strips refs to dropped nodes.
+- **Assertion clusters are UI-only, and the pipeline order is filter (tags → focus-mode lineage) →
+  collapse → layout** (`packages/ui/src/collapseAssertions.ts`, `lineage.ts`). A cluster id
+  (`assertions:<parents>`) is synthetic: it names no file and MUST never be sent to a host —
+  `openFile`/`showCompiledSql` always carry a real member node. Collapsing before the tag filter
+  would describe assertions that aren't on screen, and a group with no upstream is never collapsed
+  because the filter strips refs to dropped nodes.
   Clusters are listed in the detail panel and deliberately NOT expanded in place on the canvas. That
   would need a full ELK relayout on every toggle, which is slow on a big project, and because nodes
   are locked the canvas would shift under the click.

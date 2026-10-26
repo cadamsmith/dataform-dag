@@ -6,35 +6,281 @@ body,
   height: 100%;
   margin: 0;
 }
+
+/* --- Tokens ----------------------------------------------------------------------------------
+   Every color resolves to the editor's own theme variable first, so the panel looks like part of
+   VS Code in any theme. The --fb-* fallbacks only apply outside VS Code (the dev harness). */
+
+.ddag-app {
+  --fb-bg: #f3f5f8;
+  --fb-surface: #ffffff;
+  --fb-raised: #ffffff;
+  --fb-fg: #1d2330;
+  --fb-muted: #687387;
+  --fb-border: #dbe0e7;
+  --fb-accent: #3a6df0;
+  --fb-accent-fg: #ffffff;
+
+  --ddag-bg: var(--vscode-editor-background, var(--fb-bg));
+  --ddag-surface: var(--vscode-sideBar-background, var(--fb-surface));
+  --ddag-raised: var(--vscode-editorWidget-background, var(--fb-raised));
+  --ddag-fg: var(--vscode-foreground, var(--fb-fg));
+  --ddag-muted: var(--vscode-descriptionForeground, var(--fb-muted));
+  --ddag-border: var(--vscode-widget-border, var(--vscode-panel-border, var(--fb-border)));
+  --ddag-input-bg: var(--vscode-input-background, var(--fb-raised));
+  --ddag-input-fg: var(--vscode-input-foreground, var(--fb-fg));
+  --ddag-input-border: var(--vscode-input-border, var(--ddag-border));
+  --ddag-focus: var(--vscode-focusBorder, var(--fb-accent));
+  --ddag-accent: var(--vscode-button-background, var(--fb-accent));
+  --ddag-accent-fg: var(--vscode-button-foreground, var(--fb-accent-fg));
+  --ddag-accent-hover: var(--vscode-button-hoverBackground, var(--fb-accent));
+  --ddag-btn2-bg: var(--vscode-button-secondaryBackground, color-mix(in srgb, var(--ddag-fg) 9%, transparent));
+  --ddag-btn2-fg: var(--vscode-button-secondaryForeground, var(--ddag-fg));
+  --ddag-btn2-hover: var(--vscode-button-secondaryHoverBackground, color-mix(in srgb, var(--ddag-fg) 15%, transparent));
+  --ddag-hover: var(--vscode-list-hoverBackground, color-mix(in srgb, var(--ddag-fg) 7%, transparent));
+  --ddag-active-bg: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--ddag-accent) 16%, transparent));
+  --ddag-active-fg: var(--vscode-list-activeSelectionForeground, var(--ddag-fg));
+  --ddag-match: var(--vscode-list-highlightForeground, var(--ddag-accent));
+  --ddag-badge-bg: var(--vscode-badge-background, var(--ddag-accent));
+  --ddag-badge-fg: var(--vscode-badge-foreground, var(--ddag-accent-fg));
+  --ddag-code-bg: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--ddag-fg) 6%, transparent));
+  --ddag-shadow: var(--vscode-widget-shadow, rgb(15 23 42 / 16%));
+  --ddag-error: var(--vscode-errorForeground, #d9364f);
+  --ddag-warn: var(--vscode-editorWarning-foreground, #c98a12);
+  --ddag-ok: var(--vscode-testing-iconPassed, #2ea36a);
+  --ddag-grid: color-mix(in srgb, var(--ddag-fg) 22%, transparent);
+  --ddag-edge: color-mix(in srgb, var(--ddag-fg) 30%, transparent);
+  --ddag-edge-active: var(--ddag-fg);
+  --ddag-minimap-mask: color-mix(in srgb, var(--ddag-bg) 72%, transparent);
+  --ddag-font: var(--vscode-font-family, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --ddag-mono: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+
+  /* Node types: deeper hues for light themes, lifted ones for dark (below). */
+  --ddag-type-source: #6b7486;
+  --ddag-type-table: #2f6fe0;
+  --ddag-type-view: #12945f;
+  --ddag-type-incremental: #d9701c;
+  --ddag-type-assertion: #d9364f;
+  --ddag-type-operations: #8a5ad6;
+}
+
+body.vscode-dark .ddag-app,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) .ddag-app {
+  --ddag-type-source: #9aa4b5;
+  --ddag-type-table: #6aa1ff;
+  --ddag-type-view: #4cc995;
+  --ddag-type-incremental: #f5a05a;
+  --ddag-type-assertion: #f47589;
+  --ddag-type-operations: #b994ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not([class*="vscode-"]) .ddag-app {
+    --fb-bg: #14171c;
+    --fb-surface: #1a1e24;
+    --fb-raised: #20252d;
+    --fb-fg: #d8dde5;
+    --fb-muted: #8a93a3;
+    --fb-border: #2d333d;
+    --fb-accent: #5b8cff;
+    --ddag-type-source: #9aa4b5;
+    --ddag-type-table: #6aa1ff;
+    --ddag-type-view: #4cc995;
+    --ddag-type-incremental: #f5a05a;
+    --ddag-type-assertion: #f47589;
+    --ddag-type-operations: #b994ff;
+  }
+}
+
+/* --- Frame ----------------------------------------------------------------------------------- */
+
 .ddag-app {
   display: flex;
   flex-direction: column;
   height: 100%;
-  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #111827;
-  background: #f9fafb;
+  font: 13px/1.4 var(--ddag-font);
+  color: var(--ddag-fg);
+  background: var(--ddag-bg);
 }
+.ddag-app *,
+.ddag-app *::before,
+.ddag-app *::after {
+  box-sizing: border-box;
+}
+.ddag-app :focus-visible {
+  outline: 1px solid var(--ddag-focus);
+  outline-offset: 1px;
+}
+.ddag-app ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.ddag-app ::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, color-mix(in srgb, var(--ddag-fg) 20%, transparent));
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
+}
+.ddag-app ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vscode-scrollbarSlider-hoverBackground, color-mix(in srgb, var(--ddag-fg) 32%, transparent));
+}
+.ddag-app ::-webkit-scrollbar-track,
+.ddag-app ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ddag-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.ddag-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Topbar ---------------------------------------------------------------------------------- */
+
+/* Popovers hang out of the topbar over the canvas, so it must stack above it and not clip. */
 .ddag-topbar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ddag-border);
+  background: var(--ddag-bg);
+}
+.ddag-topbar__tools,
+.ddag-topbar__meta {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 14px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
+  gap: 6px;
+  min-width: 0;
 }
-.ddag-topbar__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.ddag-topbar__spacer {
-  flex: 1;
+.ddag-topbar__meta {
+  gap: 14px;
 }
 .ddag-topbar__count {
-  color: #6b7280;
+  color: var(--ddag-muted);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+
+/* A topbar control: flat like a VS Code toolbar item until hovered or holding state. */
+.ddag-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ddag-input-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ddag-fg);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ddag-tool:hover {
+  background: var(--ddag-hover);
+}
+.ddag-tool[aria-expanded="true"] {
+  background: var(--ddag-hover);
+  border-color: var(--ddag-focus);
+}
+.ddag-tool.is-active {
+  border-color: color-mix(in srgb, var(--ddag-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--ddag-accent) 12%, transparent);
+}
+.ddag-tool__count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--ddag-badge-bg);
+  color: var(--ddag-badge-fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+.ddag-tool--warn {
+  border-color: color-mix(in srgb, var(--ddag-warn) 55%, transparent);
+  color: var(--ddag-warn);
+}
+.ddag-glyph {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* The grouping switch: a real on/off track instead of a button that changes color. */
+.ddag-switch__track {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ddag-fg) 22%, transparent);
+  transition: background 140ms ease;
+}
+.ddag-switch__track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ddag-bg);
+  transition: transform 140ms ease;
+}
+.ddag-switch.is-on .ddag-switch__track {
+  background: var(--ddag-accent);
+}
+.ddag-switch.is-on .ddag-switch__track::after {
+  transform: translateX(10px);
+  background: var(--ddag-accent-fg);
+}
+
+.ddag-field {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--ddag-input-border);
+  border-radius: 6px;
+  background: var(--ddag-input-bg);
+  color: var(--ddag-input-fg);
+  font: inherit;
+}
+.ddag-field::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--ddag-muted));
+}
+.ddag-field:focus {
+  outline: none;
+  border-color: var(--ddag-focus);
+}
+.ddag-field::-webkit-search-cancel-button {
+  display: none;
+}
+
+.ddag-textbtn {
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--vscode-textLink-foreground, var(--ddag-accent));
+  font: inherit;
+  cursor: pointer;
+}
+.ddag-textbtn:hover {
+  text-decoration: underline;
+}
+
+/* --- Legend + status --------------------------------------------------------------------------- */
+
 .ddag-legend {
   display: flex;
   gap: 12px;
@@ -43,446 +289,908 @@ body,
   list-style: none;
 }
 .ddag-legend__item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-size: 12px;
-  color: #4b5563;
+  color: var(--ddag-muted);
+  white-space: nowrap;
 }
-.ddag-legend__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+.ddag-legend__item .ddag-typeicon {
+  width: 13px;
+  height: 13px;
+  color: var(--type);
 }
-.ddag-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
+.ddag-legend__count {
+  color: var(--ddag-fg);
+  font-variant-numeric: tabular-nums;
 }
-.ddag-canvas {
-  flex: 1;
-  min-width: 0;
+.ddag-legend__item.is-absent {
+  opacity: 0.4;
 }
-.ddag-empty {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  color: #9ca3af;
+@media (max-width: 1180px) {
+  .ddag-legend__name {
+    display: none;
+  }
 }
-.ddag-empty__box {
-  max-width: 560px;
-  padding: 0 16px;
-  color: #4b5563;
-  font-size: 13px;
-}
-.ddag-empty__message {
-  max-height: 240px;
-  overflow: auto;
-  white-space: pre-wrap;
+
+.ddag-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  color: #dc2626;
+  color: var(--ddag-muted);
+  white-space: nowrap;
 }
-.ddag-detail {
-  width: 300px;
-  flex-shrink: 0;
+.ddag-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ddag-ok);
+}
+.ddag-status--compiling .ddag-status__dot {
+  background: var(--ddag-warn);
+  animation: ddag-pulse 1.1s ease-in-out infinite;
+}
+.ddag-status--error {
+  color: var(--ddag-error);
+}
+.ddag-status--error .ddag-status__dot {
+  background: var(--ddag-error);
+}
+@keyframes ddag-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* --- Popovers ---------------------------------------------------------------------------------- */
+
+.ddag-pop,
+.ddag-search {
+  position: relative;
+}
+.ddag-pop__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--ddag-border);
+  border-radius: 8px;
+  background: var(--ddag-raised);
+  color: var(--ddag-fg);
+  box-shadow: 0 10px 30px var(--ddag-shadow);
+  list-style: none;
+  animation: ddag-drop 120ms ease-out;
+}
+@keyframes ddag-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.ddag-pop__empty {
+  padding: 8px 10px;
+  color: var(--ddag-muted);
+}
+
+/* Search */
+.ddag-search__icon {
+  position: absolute;
+  top: 7px;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  color: var(--ddag-muted);
+  pointer-events: none;
+}
+.ddag-search__input {
+  width: 260px;
+  padding-left: 29px;
+  padding-right: 28px;
+}
+.ddag-search__kbd {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  border: 1px solid var(--ddag-border);
+  border-radius: 4px;
+  color: var(--ddag-muted);
+  font: 11px/16px var(--ddag-mono);
+  text-align: center;
+  pointer-events: none;
+}
+.ddag-search__results {
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  max-height: 360px;
   overflow-y: auto;
-  padding: 14px;
-  border-left: 1px solid #e5e7eb;
-  background: #ffffff;
 }
-.ddag-detail__head {
-  display: flex;
+.ddag-search__result {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
   align-items: center;
   gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
 }
-.ddag-detail__title {
-  margin: 0;
-  font-size: 15px;
-  word-break: break-all;
+.ddag-search__result .ddag-typeicon {
+  width: 14px;
+  height: 14px;
+  color: var(--type);
 }
-.ddag-badge {
-  color: #fff;
-  font-size: 11px;
+.ddag-search__result.is-active {
+  background: var(--ddag-active-bg);
+  color: var(--ddag-active-fg);
+}
+.ddag-search__name {
+  overflow: hidden;
+  font: 12.5px/1.4 var(--ddag-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ddag-search__name mark {
+  background: none;
+  color: var(--ddag-match);
   font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 999px;
 }
-.ddag-detail__tags {
+.ddag-search__type {
+  color: var(--ddag-muted);
+  font-size: 11px;
+}
+
+/* Tags */
+.ddag-tags {
+  width: 260px;
+  padding: 6px;
+}
+.ddag-tags__search {
+  width: 100%;
+}
+.ddag-tags__list {
+  max-height: 260px;
+  margin: 6px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.ddag-tags__option {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ddag-tags__option:hover {
+  background: var(--ddag-hover);
+}
+.ddag-tags__check {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--vscode-checkbox-border, var(--ddag-input-border));
+  border-radius: 3px;
+  background: var(--vscode-checkbox-background, var(--ddag-input-bg));
+}
+.ddag-tags__option.is-on .ddag-tags__check {
+  border-color: var(--ddag-accent);
+  background: var(--ddag-accent);
+}
+.ddag-tags__option.is-on .ddag-tags__check::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--ddag-accent-fg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.ddag-tags__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ddag-tags__count {
+  color: var(--ddag-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ddag-tags__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--ddag-border);
+  color: var(--ddag-muted);
+  font-size: 11.5px;
+}
+
+/* The active-filter strip under the topbar. */
+.ddag-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
-}
-.ddag-tag {
-  font-size: 11px;
-  background: #eef2ff;
-  color: #4338ca;
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-.ddag-detail__desc {
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ddag-border);
+  background: color-mix(in srgb, var(--ddag-accent) 6%, var(--ddag-bg));
   font-size: 12px;
-  color: #4b5563;
-  white-space: pre-wrap;
-  max-height: 220px;
+}
+.ddag-chips__lead {
+  color: var(--ddag-muted);
+}
+.ddag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 2px 0 9px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--ddag-accent) 18%, transparent);
+}
+.ddag-chip__x {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--ddag-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ddag-chip__x:hover {
+  background: var(--ddag-hover);
+  color: var(--ddag-fg);
+}
+
+/* Focus mode strip: same band as the tag chips, with the focused node named in its own type color. */
+.ddag-focusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ddag-border);
+  background: color-mix(in srgb, var(--ddag-accent) 6%, var(--ddag-bg));
+  font-size: 12px;
+}
+.ddag-focusbar__lead,
+.ddag-focusbar__counts {
+  color: var(--ddag-muted);
+}
+.ddag-focusbar__target {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  border: 1px solid color-mix(in srgb, var(--type) 55%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--type) 14%, transparent);
+  font: 600 12px var(--ddag-mono);
+}
+.ddag-focusbar__target .ddag-typeicon {
+  width: 13px;
+  height: 13px;
+  color: var(--type);
+}
+.ddag-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  border: 1px solid var(--ddag-input-border);
+  border-radius: 6px;
+}
+.ddag-stepper__btn {
+  width: 22px;
+  height: 100%;
+  border: none;
+  background: none;
+  color: var(--ddag-fg);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ddag-stepper__btn:hover:not(:disabled) {
+  background: var(--ddag-hover);
+}
+.ddag-stepper__btn:disabled {
+  color: var(--ddag-muted);
+  opacity: 0.5;
+  cursor: default;
+}
+.ddag-stepper__value {
+  min-width: 52px;
+  padding: 0 4px;
+  border-inline: 1px solid var(--ddag-input-border);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Issues */
+.ddag-issues {
+  width: 360px;
+  max-height: 320px;
   overflow-y: auto;
+  padding: 4px 10px;
 }
-.ddag-neighbors__title {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #6b7280;
-  margin: 14px 0 4px;
-}
-.ddag-count {
-  color: #9ca3af;
-}
-.ddag-neighbors__empty {
-  margin: 0;
-  color: #9ca3af;
-  font-size: 12px;
-}
-.ddag-neighbors__list {
+.ddag-issues__list,
+.ddag-issues__files {
   margin: 0;
   padding: 0;
   list-style: none;
 }
+.ddag-issues__item {
+  padding: 8px 0;
+  font-size: 12px;
+}
+.ddag-issues__item + .ddag-issues__item {
+  border-top: 1px solid var(--ddag-border);
+}
+.ddag-issues__text {
+  margin: 0 0 4px;
+}
 .ddag-link {
-  background: none;
+  padding: 0;
   border: none;
-  padding: 2px 0;
-  color: #2563eb;
+  background: none;
+  color: var(--vscode-textLink-foreground, var(--ddag-accent));
+  font: 12px var(--ddag-mono);
   cursor: pointer;
-  font: inherit;
-  text-align: left;
 }
 .ddag-link:hover {
   text-decoration: underline;
 }
+.ddag-code {
+  font: 11.5px var(--ddag-mono);
+  color: var(--ddag-muted);
+}
+
+/* --- Canvas ---------------------------------------------------------------------------------- */
+
+.ddag-flow {
+  position: absolute;
+  inset: 0;
+}
+.ddag-flow[data-relayout="0"] .react-flow__viewport {
+  animation: ddag-relayout-a 260ms ease-out;
+}
+.ddag-flow[data-relayout="1"] .react-flow__viewport {
+  animation: ddag-relayout-b 260ms ease-out;
+}
+@keyframes ddag-relayout-a {
+  from {
+    opacity: 0.2;
+  }
+}
+@keyframes ddag-relayout-b {
+  from {
+    opacity: 0.2;
+  }
+}
+.ddag-markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.ddag-arrow__head {
+  fill: var(--ddag-edge);
+}
+.ddag-arrow-active__head {
+  fill: var(--ddag-edge-active);
+}
+
+.ddag-flow .react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--ddag-edge);
+  --xy-edge-stroke-width: 1.4;
+  --xy-controls-button-background-color: var(--ddag-raised);
+  --xy-controls-button-background-color-hover: var(--ddag-hover);
+  --xy-controls-button-color: var(--ddag-fg);
+  --xy-controls-button-color-hover: var(--ddag-fg);
+  --xy-controls-button-border-color: var(--ddag-border);
+  --xy-controls-box-shadow: 0 2px 10px var(--ddag-shadow);
+  --xy-minimap-background-color: var(--ddag-raised);
+  background: var(--ddag-bg);
+}
+.ddag-flow .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--ddag-border);
+  border-radius: 8px;
+}
+.ddag-flow .react-flow__controls-button svg {
+  fill: currentColor;
+}
+.ddag-flow .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--ddag-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px var(--ddag-shadow);
+}
+.ddag-flow .react-flow__edge-path {
+  stroke: var(--ddag-edge);
+  stroke-width: 1.4;
+  transition: opacity 120ms ease;
+}
+.ddag-flow .react-flow__edge.is-active .react-flow__edge-path {
+  stroke: var(--ddag-edge-active);
+  stroke-width: 1.8;
+}
+.ddag-flow .react-flow__edge.is-faded .react-flow__edge-path {
+  opacity: 0.12;
+}
+
+/* Node: a type tab carrying the type's glyph, then the name over the type. */
 .ddag-node {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--ddag-border);
+  border-radius: 8px;
+  background: var(--ddag-raised);
+  box-shadow: 0 1px 2px var(--ddag-shadow);
+  cursor: pointer;
+  transition: opacity 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.ddag-node:hover {
+  border-color: color-mix(in srgb, var(--type) 70%, var(--ddag-border));
+}
+.ddag-node__tab {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  border-right: 1px solid color-mix(in srgb, var(--type) 25%, var(--ddag-border));
+  border-radius: 7px 0 0 7px;
+  background: color-mix(in srgb, var(--type) 15%, var(--ddag-raised));
+  color: var(--type);
+}
+.ddag-node__tab .ddag-typeicon {
+  width: 15px;
+  height: 15px;
+}
+.ddag-node__text {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 1px;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 6px 12px 6px 10px;
-  border: 1px solid #d5dbe3;
-  border-left: 4px solid var(--accent);
-  border-radius: 7px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
-  transition: opacity 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  min-width: 0;
+  padding: 0 12px 0 10px;
 }
 .ddag-node__label {
-  font: 600 13px/1.2 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-  color: #111827;
+  overflow: hidden;
+  font: 600 12.5px/1.25 var(--ddag-mono);
+  color: var(--ddag-fg);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ddag-node__type {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--accent);
+  color: var(--ddag-muted);
+  font-size: 11px;
 }
 .ddag-node.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+  border-color: var(--type);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--type) 32%, transparent);
+}
+/* The anchor of focus mode: a doubled ring in its type color, outside any selection ring. */
+.ddag-node.is-root {
+  border-color: var(--type);
+  box-shadow:
+    0 0 0 2px var(--ddag-bg),
+    0 0 0 4px var(--type),
+    0 6px 22px color-mix(in srgb, var(--type) 30%, transparent);
 }
 .ddag-node.is-dimmed {
-  opacity: 0.22;
+  opacity: 0.25;
 }
-.ddag-node__handle {
-  width: 6px;
-  height: 6px;
-  background: #94a3b8;
-  border: none;
+/* Ports: hidden until the node is in play, then shown as small type-colored terminals. */
+.ddag-node__port.react-flow__handle {
+  width: 7px;
+  height: 7px;
+  min-width: 0;
+  min-height: 0;
+  border: 1.5px solid var(--type);
+  background: var(--ddag-raised);
   opacity: 0;
+  transition: opacity 140ms ease;
 }
-.ddag-node:hover .ddag-node__handle {
+.ddag-node:hover .ddag-node__port,
+.ddag-node.is-selected .ddag-node__port {
   opacity: 1;
 }
-.ddag-btn {
-  background: #111827;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 14px;
-}
-.ddag-btn:hover {
-  background: #374151;
-}
 
-/* --- Topbar controls: search, tag filter, diagnostics, mode toggle ------------------------- */
-
-/* The two <details> menus and the search results all float over the canvas, so their containers
-   anchor an absolutely-positioned popover and the topbar itself must not clip them. */
-.ddag-topbar {
-  position: relative;
-  z-index: 2;
-}
-.ddag-search,
-.ddag-tagfilter,
-.ddag-diagnostics {
-  position: relative;
-}
-.ddag-search__results,
-.ddag-tagfilter__menu,
-.ddag-diagnostics__menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 240px;
-  max-width: 420px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(17 24 39 / 12%);
-}
-.ddag-search__input,
-.ddag-tagfilter__search {
-  width: 180px;
-  padding: 5px 9px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font: inherit;
-}
-.ddag-tagfilter__search {
-  width: 100%;
-  margin-bottom: 6px;
-}
-.ddag-search__results,
-.ddag-tagfilter__list,
-.ddag-diagnostics__list,
-.ddag-diagnostics__files {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.ddag-search__results {
-  left: 0;
-  right: auto;
-  padding: 4px;
-}
-.ddag-search__result {
-  display: block;
-  width: 100%;
-  padding: 5px 8px;
-  border: none;
-  border-radius: 5px;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.ddag-search__result:hover {
-  background: #f3f4f6;
-}
-.ddag-search__empty {
-  padding: 5px 8px;
-  color: #9ca3af;
-}
-.ddag-tagfilter__summary,
-.ddag-diagnostics__summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-.ddag-diagnostics__summary {
-  border-color: #fcd34d;
-  background: #fffbeb;
-  color: #92400e;
-}
-.ddag-tagfilter__option {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 4px;
-  cursor: pointer;
-}
-.ddag-diagnostics__item {
-  padding: 6px 4px;
-  border-top: 1px solid #f3f4f6;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.ddag-diagnostics__item:first-child {
-  border-top: none;
-}
-.ddag-diagnostics__kind {
-  display: inline-block;
-  margin-right: 4px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #fef3c7;
-  color: #92400e;
-  font-size: 11px;
-  font-weight: 700;
-}
-.ddag-diagnostics__files {
-  margin-top: 4px;
-  padding-left: 12px;
-}
-.ddag-code {
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: #f3f4f6;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-}
-.ddag-status {
-  font-size: 12px;
-  color: #6b7280;
-}
-.ddag-status--error {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-/* --- Compiled SQL in the detail panel ----------------------------------------------------- */
-
-.ddag-detail__actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ddag-detail__error {
-  margin: 12px 0 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: #991b1b;
-  font-size: 12px;
-}
-.ddag-sql__section {
-  margin-top: 14px;
-}
-.ddag-sql__label {
-  margin: 0 0 5px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
-}
-.ddag-sql__code {
-  margin: 0;
-  padding: 10px;
-  border-radius: 6px;
-  background: #111827;
-  color: #e5e7eb;
-  /* Long compiled SELECTs are the norm — scroll rather than reflow, so indentation survives. */
-  overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  line-height: 1.5;
-}
-
-/* --- Collapsed assertion clusters ----------------------------------------------------------- */
-
-/* A cluster reads as a stack: the same card with two offset sheets peeking out behind it, so "3
-   assertions" looks like several nodes rather than one oddly-named one. */
+/* A cluster reads as a stack: the same card with two offset sheets peeking out behind it. */
 .ddag-node.is-cluster::before,
 .ddag-node.is-cluster::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border: 1px solid #d5dbe3;
-  border-left: 4px solid var(--accent);
-  border-radius: 7px;
-  background: #ffffff;
+  inset: -1px;
   z-index: -1;
+  border: 1px solid var(--ddag-border);
+  border-radius: 8px;
+  background: var(--ddag-raised);
 }
 .ddag-node.is-cluster::before {
   transform: translate(4px, 4px);
-  opacity: 0.55;
+  opacity: 0.7;
 }
 .ddag-node.is-cluster::after {
   transform: translate(8px, 8px);
-  opacity: 0.3;
-}
-.ddag-node.is-cluster {
-  position: relative;
+  opacity: 0.4;
 }
 
-/* The topbar's grouping switch: quiet when off, filled when on, like the mode toggle. */
-.ddag-btn--toggle {
-  margin-top: 0;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  background: #fff;
-  color: #4b5563;
-  border: 1px solid #d5dbe3;
+/* --- Empty / error states --------------------------------------------------------------------- */
+
+.ddag-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  background: radial-gradient(var(--ddag-grid) 1.2px, transparent 1.2px) 0 0 / 22px 22px;
 }
-.ddag-btn--toggle:hover {
-  background: #f3f4f6;
+.ddag-empty__box {
+  max-width: 560px;
+  padding: 18px 20px;
+  border: 1px solid var(--ddag-border);
+  border-radius: 10px;
+  background: var(--ddag-raised);
+  box-shadow: 0 6px 24px var(--ddag-shadow);
 }
-.ddag-btn--toggle.is-on {
-  background: #111827;
-  border-color: #111827;
-  color: #fff;
+.ddag-empty__box strong {
+  font-size: 14px;
+}
+.ddag-empty__box p {
+  margin: 6px 0 0;
+  color: var(--ddag-muted);
+}
+.ddag-empty__box--quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ddag-muted);
+}
+.ddag-empty__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ddag-warn);
+  animation: ddag-pulse 1.1s ease-in-out infinite;
+}
+.ddag-empty__message {
+  max-height: 260px;
+  margin: 10px 0 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 6px;
+  background: var(--ddag-code-bg);
+  color: var(--ddag-error);
+  font: 12px/1.5 var(--ddag-mono);
+  white-space: pre-wrap;
 }
 
-/* The member list inside a cluster's detail panel. */
-.ddag-members__list {
-  list-style: none;
+/* --- Detail panel ----------------------------------------------------------------------------- */
+
+.ddag-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 340px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 16px;
+  border-left: 1px solid var(--ddag-border);
+  border-top: 2px solid var(--type);
+  background: var(--ddag-surface);
+  animation: ddag-slide 160ms ease-out;
+}
+@keyframes ddag-slide {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+.ddag-detail__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ddag-detail__glyph {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--type) 16%, transparent);
+  color: var(--type);
+}
+.ddag-detail__glyph .ddag-typeicon {
+  width: 17px;
+  height: 17px;
+}
+.ddag-detail__heading {
+  flex: 1;
+  min-width: 0;
+}
+.ddag-detail__kicker {
+  color: var(--type);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.ddag-detail__title {
+  margin: 1px 0 0;
+  font: 600 14px/1.3 var(--ddag-mono);
+  overflow-wrap: anywhere;
+}
+.ddag-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--ddag-muted);
+  cursor: pointer;
+}
+.ddag-iconbtn:hover {
+  background: var(--ddag-hover);
+  color: var(--ddag-fg);
+}
+.ddag-iconbtn svg {
+  width: 14px;
+  height: 14px;
+}
+.ddag-detail__file {
+  margin: -6px 0 0;
+  overflow: hidden;
+  color: var(--ddag-muted);
+  font: 11.5px var(--ddag-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ddag-detail__desc {
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  color: var(--ddag-fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.ddag-taglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   margin: 0;
   padding: 0;
+  list-style: none;
+}
+.ddag-tag {
+  padding: 1px 7px;
+  border: 1px solid var(--ddag-border);
+  border-radius: 10px;
+  color: var(--ddag-muted);
+  font-size: 11.5px;
+}
+.ddag-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ddag-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--ddag-btn2-bg);
+  color: var(--ddag-btn2-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.ddag-btn:hover {
+  background: var(--ddag-btn2-hover);
+}
+.ddag-btn--primary {
+  background: var(--ddag-accent);
+  color: var(--ddag-accent-fg);
+}
+.ddag-btn--primary:hover {
+  background: var(--ddag-accent-hover);
+}
+.ddag-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ddag-btn--small {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.ddag-detail__error {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--ddag-error);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ddag-error) 10%, transparent);
+  color: var(--ddag-error);
+  font-size: 12px;
+}
+
+.ddag-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  color: var(--ddag-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ddag-section-title__count {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--ddag-btn2-bg);
+  color: var(--ddag-fg);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ddag-neighbors__empty {
+  margin: 0;
+  color: var(--ddag-muted);
+  font-size: 12px;
+}
+.ddag-neighbors__list {
+  margin: 0 -6px;
+  padding: 0;
+  list-style: none;
+}
+.ddag-neighbor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ddag-neighbor:hover {
+  background: var(--ddag-hover);
+}
+.ddag-neighbor .ddag-typeicon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--type);
+}
+.ddag-neighbor__name {
+  overflow: hidden;
+  font: 12.5px/1.4 var(--ddag-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ddag-sql {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ddag-sql__block {
+  position: relative;
+}
+.ddag-sql__code {
+  max-height: 380px;
+  margin: 0;
+  /* Right padding keeps the first line's end clear of the copy button. */
+  padding: 10px 36px 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--ddag-border);
+  border-radius: 6px;
+  background: var(--vscode-editor-background, var(--ddag-code-bg));
+  color: var(--vscode-editor-foreground, var(--ddag-fg));
+  /* Long compiled SELECTs are the norm: scroll rather than reflow, so indentation survives. */
+  font: 12px/1.55 var(--ddag-mono);
+}
+.ddag-sql__copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--ddag-border);
+  border-radius: 5px;
+  background: var(--ddag-raised);
+  color: var(--ddag-muted);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.ddag-sql__block:hover .ddag-sql__copy,
+.ddag-sql__copy:focus-visible {
+  opacity: 1;
+}
+.ddag-sql__copy:hover {
+  color: var(--ddag-fg);
+  background: var(--ddag-hover);
+}
+.ddag-sql__copy.is-copied {
+  color: var(--ddag-ok);
+  opacity: 1;
+}
+.ddag-sql__copy svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ddag-members__list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .ddag-members__item {
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--ddag-border);
   border-radius: 8px;
-  background: #fbfbfd;
+  background: var(--ddag-raised);
 }
 .ddag-members__item.is-highlighted {
-  border-color: var(--ddag-accent, #dc2626);
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+  border-color: var(--type);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--type) 25%, transparent);
 }
 .ddag-members__name {
-  display: block;
-  font: 600 12px/1.3 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-  color: #111827;
-  word-break: break-all;
-}
-.ddag-members__tags {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  font: 600 12.5px/1.3 var(--ddag-mono);
+  overflow-wrap: anywhere;
 }
 .ddag-members__desc {
+  margin: 0;
+  color: var(--ddag-muted);
   font-size: 12px;
-  color: #4b5563;
-  margin: 6px 0 0;
   white-space: pre-wrap;
 }
 .ddag-members__actions {
   display: flex;
   gap: 6px;
 }
-.ddag-members__actions .ddag-btn {
-  margin-top: 8px;
-  padding: 4px 9px;
-  font-size: 12px;
+
+@media (prefers-reduced-motion: reduce) {
+  .ddag-app *,
+  .ddag-app *::before,
+  .ddag-app *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

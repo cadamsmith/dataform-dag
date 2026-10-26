@@ -20,14 +20,17 @@ export interface UiGraph {
   issues: GraphIssue[];
 }
 
-/** Fill color per node type — the legend the whole UI shares. */
+/**
+ * Color per node type — the legend the whole UI shares. Each is a CSS variable (light/dark values in
+ * app.css, so they follow the editor theme) with a fallback that reads on either background.
+ */
 export const NODE_COLORS: Record<NodeType, string> = {
-  source: "#6b7280",
-  table: "#2563eb",
-  view: "#16a34a",
-  incremental: "#ea580c",
-  assertion: "#dc2626",
-  operations: "#9333ea",
+  source: "var(--ddag-type-source, #8a94a6)",
+  table: "var(--ddag-type-table, #4c8dff)",
+  view: "var(--ddag-type-view, #2fb67c)",
+  incremental: "var(--ddag-type-incremental, #f08c3a)",
+  assertion: "var(--ddag-type-assertion, #ef5a6f)",
+  operations: "var(--ddag-type-operations, #a77bf3)",
 };
 
 export interface FlowNode {

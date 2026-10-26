@@ -1,12 +1,13 @@
-import type { CompiledSqlSection, DataformNode } from "@dataform-dag/core";
+import type { CompiledSqlSection, DataformNode, NodeType } from "@dataform-dag/core";
 import { NODE_COLORS } from "./graphToFlow.js";
-import { CompiledSql, NeighborList } from "./NodeDetailPanel.js";
+import { CompiledSql, DetailHead, FocusButton, NeighborList, TagList } from "./NodeDetailPanel.js";
 
 export interface ClusterDetailPanelProps {
   /** The assertions this cluster stands for, in display order. */
   members: DataformNode[];
   upstream: string[];
   downstream: string[];
+  typeOf?: (nodeId: string) => NodeType | undefined;
   /** A member to call out — set when the selection arrived from search, a diagnostic, or the host. */
   highlightedId?: string | null;
   onSelect: (nodeId: string) => void;
@@ -17,6 +18,9 @@ export interface ClusterDetailPanelProps {
   /** Whatever SQL the host last returned; rendered under the member that asked for it. */
   compiledSql?: { nodeId: string; sections: CompiledSqlSection[] } | null;
   compiledSqlError?: { nodeId: string; message: string } | null;
+  onClose?: () => void;
+  /** Enter focus mode on the whole group; absent when it is already the focus. */
+  onFocus?: () => void;
 }
 
 /**
@@ -30,29 +34,37 @@ export function ClusterDetailPanel({
   members,
   upstream,
   downstream,
+  typeOf,
   highlightedId = null,
   onSelect,
   onOpenFile,
   onShowCompiledSql,
   compiledSql = null,
   compiledSqlError = null,
+  onClose,
+  onFocus,
 }: ClusterDetailPanelProps): JSX.Element {
   return (
-    <aside className="ddag-detail">
-      <header className="ddag-detail__head">
-        <span className="ddag-badge" style={{ background: NODE_COLORS.assertion }}>
-          assertion
-        </span>
-        <h2 className="ddag-detail__title">{members.length} assertions</h2>
-      </header>
+    <aside className="ddag-detail" style={{ ["--type" as string]: NODE_COLORS.assertion }}>
+      <DetailHead
+        type="assertion"
+        kicker="assertion group"
+        title={`${members.length} assertions`}
+        onClose={onClose}
+      />
       <p className="ddag-detail__desc">
-        Collapsed because they share the same dependencies. Expand any one for its file or SQL.
+        Grouped because they check the same models. Each keeps its own file and compiled SQL.
       </p>
-      <NeighborList title="Upstream (depends on)" ids={upstream} onSelect={onSelect} />
-      <NeighborList title="Downstream (dependents)" ids={downstream} onSelect={onSelect} />
+      {onFocus && (
+        <div className="ddag-detail__actions">
+          <FocusButton onClick={onFocus} />
+        </div>
+      )}
+      <NeighborList title="Depends on" ids={upstream} typeOf={typeOf} onSelect={onSelect} />
+      <NeighborList title="Used by" ids={downstream} typeOf={typeOf} onSelect={onSelect} />
       <section className="ddag-members">
-        <h3 className="ddag-neighbors__title">
-          Assertions <span className="ddag-count">{members.length}</span>
+        <h3 className="ddag-section-title">
+          Assertions <span className="ddag-section-title__count">{members.length}</span>
         </h3>
         <ul className="ddag-members__list">
           {members.map((member) => (
@@ -66,32 +78,26 @@ export function ClusterDetailPanel({
               }`}
             >
               <span className="ddag-members__name">{member.id}</span>
-              {member.tags.length > 0 && (
-                <span className="ddag-members__tags">
-                  {member.tags.map((tag) => (
-                    <span key={tag} className="ddag-tag">
-                      {tag}
-                    </span>
-                  ))}
+              {member.tags.length > 0 && <TagList tags={member.tags} />}
+              {member.description && <p className="ddag-members__desc">{member.description}</p>}
+              {(onOpenFile || onShowCompiledSql) && (
+                <span className="ddag-members__actions">
+                  {onOpenFile && (
+                    <button type="button" className="ddag-btn ddag-btn--small" onClick={() => onOpenFile(member)}>
+                      Go to file
+                    </button>
+                  )}
+                  {onShowCompiledSql && (
+                    <button
+                      type="button"
+                      className="ddag-btn ddag-btn--small"
+                      onClick={() => onShowCompiledSql(member)}
+                    >
+                      Compiled SQL
+                    </button>
+                  )}
                 </span>
               )}
-              {member.description && <p className="ddag-members__desc">{member.description}</p>}
-              <span className="ddag-members__actions">
-                {onOpenFile && (
-                  <button type="button" className="ddag-btn" onClick={() => onOpenFile(member)}>
-                    Go to file
-                  </button>
-                )}
-                {onShowCompiledSql && (
-                  <button
-                    type="button"
-                    className="ddag-btn"
-                    onClick={() => onShowCompiledSql(member)}
-                  >
-                    Compiled SQL
-                  </button>
-                )}
-              </span>
               {compiledSqlError?.nodeId === member.id && (
                 <p className="ddag-detail__error">{compiledSqlError.message}</p>
               )}

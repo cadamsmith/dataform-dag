@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { SerializedGraph } from "@dataform-dag/core";
 import { layoutGraph } from "../src/graphToFlow.js";
-import { DagGraph } from "../src/DagGraph.js";
+import { DagGraph, anchorBetween } from "../src/DagGraph.js";
 
 // React Flow measures its pane via getBoundingClientRect; jsdom returns zeros, so give it a size.
 const originalRect = Element.prototype.getBoundingClientRect;
@@ -38,5 +38,35 @@ describe("DagGraph (real React Flow canvas)", () => {
     expect(midNode).not.toBeNull();
     fireEvent.click(midNode as Element);
     expect(onSelectNode).toHaveBeenCalledWith("mid");
+  });
+});
+
+describe("anchorBetween", () => {
+  const at = (id: string, x: number, y: number) => ({
+    id,
+    position: { x, y },
+    width: 100,
+    height: 40,
+    data: { label: id, nodeType: "table" as const, color: "" },
+  });
+
+  it("holds the selection still when it survives the relayout", () => {
+    const anchor = anchorBetween([at("a", 0, 0), at("b", 500, 0)], [at("a", 40, 10), at("b", 0, 0)], "a", {
+      x: 550,
+      y: 20,
+    });
+    expect(anchor).toEqual({ before: { x: 0, y: 0 }, after: { x: 40, y: 10 } });
+  });
+
+  it("otherwise picks the surviving node nearest the middle of the view", () => {
+    const anchor = anchorBetween([at("a", 0, 0), at("b", 500, 0), at("gone", 260, 0)], [at("a", 0, 0), at("b", 300, 0)], null, {
+      x: 480,
+      y: 20,
+    });
+    expect(anchor?.after).toEqual({ x: 300, y: 0 });
+  });
+
+  it("returns null when nothing survives", () => {
+    expect(anchorBetween([at("a", 0, 0)], [at("b", 0, 0)], "a", { x: 0, y: 0 })).toBeNull();
   });
 });
