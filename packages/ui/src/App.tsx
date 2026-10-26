@@ -58,7 +58,6 @@ export function App({ bridge }: AppProps): JSX.Element {
   } = useHostBridge(bridge);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [groupAssertions, setGroupAssertions] = useState(true);
   /** With a tag filter on, also show each match's direct neighbors (as context). */
   const [showContext, setShowContext] = useState(false);
   /** Focus mode: the real node ids whose lineage is all that's shown (several for a cluster). */
@@ -119,18 +118,12 @@ export function App({ bridge }: AppProps): JSX.Element {
     [shownGraph, tree, foldering, expanded],
   );
   const folderedGraph = folders?.graph ?? shownGraph;
-  // Assertion grouping runs even when it is off — it is O(nodes), and its result is what tells us
-  // whether there is anything to group at all.
-  const grouping: CollapsedGraph | null = useMemo(
+  // Assertions are always grouped: drawn one by one they are leaf clutter, and the cluster's panel
+  // lists every member with its own file and compiled SQL.
+  const collapsed: CollapsedGraph | null = useMemo(
     () => (folderedGraph ? collapseAssertions(folderedGraph) : null),
     [folderedGraph],
   );
-  const ungrouped: CollapsedGraph | null = useMemo(
-    () =>
-      folderedGraph ? { graph: folderedGraph, members: NO_MEMBERS, clusterOf: NO_CLUSTERS } : null,
-    [folderedGraph],
-  );
-  const collapsed = groupAssertions ? grouping : ungrouped;
   const flow = useLayout(collapsed?.graph ?? null);
   // Index the UNFILTERED graph so the detail panel reports a node's true dependencies, and so a
   // diagnostic can link to a node the current tag filter happens to hide.
@@ -317,25 +310,6 @@ export function App({ bridge }: AppProps): JSX.Element {
   }, [clusterMembers, collapsed, selection]);
   const typeOf = (id: string): NodeType | undefined =>
     index?.byId.get(id)?.type ?? (isClusterId(id) ? "assertion" : undefined);
-  // Only offer the switch when this project actually has assertions sharing a position.
-  const canGroup = (grouping?.members.size ?? 0) > 0;
-
-  /** Toggling must not strand the selection on a node that is about to stop existing. */
-  const toggleGrouping = (): void => {
-    if (groupAssertions) {
-      setSelection((sel) => {
-        if (!sel || !isClusterId(sel.canvasId)) return sel;
-        const fallback = sel.memberId ?? grouping?.members.get(sel.canvasId)?.[0]?.id;
-        return fallback ? { canvasId: fallback, memberId: null } : null;
-      });
-    } else {
-      setSelection((sel) => {
-        const clusterId = sel && grouping?.clusterOf.get(sel.canvasId);
-        return clusterId ? { canvasId: clusterId, memberId: sel!.canvasId } : sel;
-      });
-    }
-    setGroupAssertions((on) => !on);
-  };
 
   const changeTags = (next: string[]): void => {
     setSelectedTags(next);
@@ -384,18 +358,6 @@ export function App({ bridge }: AppProps): JSX.Element {
               }}
             >
               Collapse all
-            </button>
-          )}
-          {(canGroup || !groupAssertions) && (
-            <button
-              type="button"
-              className={`ddag-tool ddag-switch${groupAssertions ? " is-on" : ""}`}
-              aria-pressed={groupAssertions}
-              onClick={toggleGrouping}
-              title="Collapse assertions that check the same models into one node"
-            >
-              <span className="ddag-switch__track" aria-hidden="true" />
-              Group assertions
             </button>
           )}
           {graph && <GraphDiagnostics issues={graph.issues} onSelectNode={selectAndJump} />}
@@ -461,7 +423,7 @@ export function App({ bridge }: AppProps): JSX.Element {
               onFocusNode={focusOn}
               rootIds={rootIds}
               contextIds={contextIds}
-              fitKey={`${selectedTags.join("\u0000")}|${showContext}|${groupAssertions}|${groupFolders}|${
+              fitKey={`${selectedTags.join("\u0000")}|${showContext}|${groupFolders}|${
                 focused ? lineage!.join("\u0000") : ""
               }|${lineageDepth}`}
             />
@@ -533,9 +495,6 @@ export function App({ bridge }: AppProps): JSX.Element {
   );
 }
 
-/** Stable empties for the un-collapsed path, so the memo doesn't hand React a new object each render. */
-const NO_MEMBERS: CollapsedGraph["members"] = new Map();
-const NO_CLUSTERS: CollapsedGraph["clusterOf"] = new Map();
 const NO_TAGS = new Map<string, number>();
 const NO_IDS: string[] = [];
 const NO_FOLDERS: ReadonlySet<string> = new Set();

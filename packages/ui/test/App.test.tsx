@@ -429,59 +429,6 @@ describe("assertion grouping", () => {
     expect(within(uniqueItem).queryByText("SELECT 'assert_rows'")).not.toBeInTheDocument();
   });
 
-  it("expands them again when grouping is switched off", async () => {
-    render(<App bridge={new MockBridge(withAssertions)} />);
-    await screen.findByText("3 of 4 nodes");
-
-    await userEvent.click(screen.getByRole("button", { name: "Group assertions" }));
-
-    expect(await screen.findByRole("button", { name: "select:assert_rows" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: `select:${CLUSTER}` })).not.toBeInTheDocument();
-    expect(screen.getByText("4 nodes")).toBeInTheDocument();
-  });
-
-  it("leaves a project with no groupable assertions untouched, and hides the toggle", async () => {
-    render(<App bridge={new MockBridge(graph)} />);
-    await screen.findByText("2 nodes");
-    expect(screen.queryByRole("button", { name: "Group assertions" })).not.toBeInTheDocument();
-  });
-
-  it("hides the toggle when a lone assertion has nothing to group with", async () => {
-    const oneAssertion: SerializedGraph = {
-      ...withAssertions,
-      nodes: withAssertions.nodes.filter((n) => n.id !== "assert_unique"),
-    };
-    render(<App bridge={new MockBridge(oneAssertion)} />);
-    await screen.findByText("3 nodes");
-    expect(screen.queryByRole("button", { name: "Group assertions" })).not.toBeInTheDocument();
-  });
-
-  it("keeps the selection on a real node when grouping is switched off", async () => {
-    render(<App bridge={new MockBridge(withAssertions)} />);
-    await userEvent.click(await screen.findByRole("button", { name: `select:${CLUSTER}` }));
-    expect(screen.getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Group assertions" }));
-
-    // The cluster is gone; the panel follows its first member rather than silently closing.
-    const panel = screen.getByRole("complementary");
-    expect(within(panel).getByRole("heading", { name: "assert_rows" })).toBeInTheDocument();
-  });
-
-  it("follows a selected assertion back into its cluster when grouping is switched on", async () => {
-    render(<App bridge={new MockBridge(withAssertions)} />);
-    await screen.findByText("3 of 4 nodes");
-    await userEvent.click(screen.getByRole("button", { name: "Group assertions" }));
-    await userEvent.click(await screen.findByRole("button", { name: "select:assert_unique" }));
-
-    await userEvent.click(screen.getByRole("button", { name: "Group assertions" }));
-
-    const panel = screen.getByRole("complementary");
-    expect(within(panel).getByRole("heading", { name: "2 assertions" })).toBeInTheDocument();
-    expect(within(panel).getByRole("listitem", { current: true })).toHaveTextContent(
-      "assert_unique",
-    );
-  });
 });
 
 describe("focus mode", () => {

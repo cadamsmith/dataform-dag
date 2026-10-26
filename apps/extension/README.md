@@ -13,7 +13,8 @@ including inline assertions and refs built in JavaScript.
   laid out left-to-right by dependency with a color-coded legend and a minimap for large projects.
 - **Stay readable at scale.** Assertions that hang off the same models collapse into a single
   "N assertions" node — click it to list them, with each one's file and compiled SQL still one click
-  away. Toggle grouping off from the toolbar when you want them all on the canvas.
+  away. A large project opens with each folder collapsed into one node; double-click a folder to
+  open it.
 - **Find anything fast.** Search nodes by name, or filter the canvas down to one or more Dataform
   `tags` — the node count in the top bar tracks what's visible. Turn on **Show neighbors** to keep
   each match's direct upstream and downstream in view, drawn dashed so the matches still stand out.
