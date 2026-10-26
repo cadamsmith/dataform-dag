@@ -19,8 +19,8 @@ including inline assertions and refs built in JavaScript.
 - **Inspect a node.** Click one for its type, tags, file path, and upstream/downstream refs — and
   the SQL Dataform actually compiles it to.
 - **Browse from the sidebar.** The Dataform DAG icon in the activity bar lists every action in the
-  project grouped by type — sources, tables, views, incrementals, assertions, operations — with each
-  one's tags beside it. Click a row to open its file; the canvas follows along when it's open.
+  project grouped by type — sources, tables, views, incrementals, assertions, operations — or, from
+  the view's title bar, by the folder its file lives in, with each one's tags beside it. Click a row to open its file; the canvas follows along when it's open.
 - **Jump straight to the code.** Click through to open a node's `.sqlx` file in the editor.
 - **Follow along as you navigate.** Switch the active editor to a modeled file and its node is
   highlighted on the canvas.

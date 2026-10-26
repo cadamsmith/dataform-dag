@@ -74,6 +74,18 @@
         "title": "Refresh",
         "category": "Dataform DAG",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "dataformDag.groupByFolder",
+        "title": "Group by Folder",
+        "category": "Dataform DAG",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "dataformDag.groupByType",
+        "title": "Group by Type",
+        "category": "Dataform DAG",
+        "icon": "$(symbol-class)"
       }
     ],
     "viewsContainers": {
@@ -113,12 +125,22 @@
       },
       {
         "view": "dataformDag.nodes",
-        "contents": "No Dataform actions found.\nThis view lists every action `dataform compile` reports, grouped by type.\n[Refresh](command:dataformDag.refresh)",
+        "contents": "No Dataform actions found.\nThis view lists every action `dataform compile` reports, grouped by type or by folder.\n[Refresh](command:dataformDag.refresh)",
         "when": "workbenchState != empty && !dataformDag.cliMissing && !dataformDag.compileFailed"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "dataformDag.groupByFolder",
+          "when": "view == dataformDag.nodes && dataformDag.treeGrouping != folder",
+          "group": "navigation@0"
+        },
+        {
+          "command": "dataformDag.groupByType",
+          "when": "view == dataformDag.nodes && dataformDag.treeGrouping == folder",
+          "group": "navigation@0"
+        },
         {
           "command": "dataformDag.showGraph",
           "when": "view == dataformDag.nodes",

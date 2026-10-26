@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataformNode, NodeType, SerializedGraph } from "@dataform-dag/core";
 import { DagTreeProvider, NODE_CONTEXT_VALUE, type TreeEntry } from "../src/dagTreeProvider.js";
-import { EventEmitter, TreeItem, TreeItemCollapsibleState, resetMock } from "./mocks/vscode.js";
+import {
+  EventEmitter,
+  ThemeIcon,
+  TreeItem,
+  TreeItemCollapsibleState,
+  resetMock,
+} from "./mocks/vscode.js";
 
 /**
  * The provider only needs three things from the store, so it gets a stub instead of the real one —
@@ -13,6 +19,7 @@ function fakeStore(graph?: SerializedGraph) {
     current: graph,
     onDidChangeGraph: emitter.event,
     ensureGraph: vi.fn(async () => "ok" as const),
+    workspaceRoot: () => "/proj" as string | undefined,
     /** Simulate a rebuild landing. */
     publish(next: SerializedGraph): void {
       this.current = next;
@@ -36,7 +43,7 @@ const providerFor = (graph?: SerializedGraph) => {
 
 /** Group entries, asserted by type — the shape the top level always returns. */
 const groupTypes = (entries: TreeEntry[]): string[] =>
-  entries.map((e) => (e.kind === "group" ? e.type : `node:${e.node.id}`));
+  entries.map((e) => (e.kind === "group" ? e.type : e.kind === "node" ? `node:${e.node.id}` : ""));
 
 beforeEach(resetMock);
 
@@ -145,6 +152,99 @@ describe("node items", () => {
     expect(value).toContain("One row per logged observation.");
     expect(value).toContain("Tags: marts");
     expect(value).toContain("Depends on: stg_observations, dim_objects");
+  });
+});
+
+describe("folder grouping", () => {
+  const at = (id: string, dir: string, type: NodeType = "table") =>
+    node(id, type, { filePath: `/proj/${dir}/${id}.sqlx` });
+
+  /** Walk the tree into `label/` for folders and `id` for nodes, nested as arrays. */
+  async function shape(tree: DagTreeProvider, entry?: TreeEntry): Promise<unknown[]> {
+    const out: unknown[] = [];
+    for (const child of await tree.getChildren(entry)) {
+      if (child.kind === "node") out.push(child.node.id);
+      else if (child.kind === "folder") out.push({ [`${child.label}/`]: await shape(tree, child) });
+    }
+    return out;
+  }
+
+  const folderTree = (graph: SerializedGraph) => {
+    const { store, tree } = providerFor(graph);
+    tree.setGrouping("folder");
+    return { store, tree };
+  };
+
+  it("nests by directory, folders before actions, each sorted", async () => {
+    const { tree } = folderTree(
+      graphOf(
+        at("stg_b", "definitions/staging"),
+        at("stg_a", "definitions/staging"),
+        at("fct", "definitions/marts"),
+        at("top", "definitions"),
+      ),
+    );
+    expect(await shape(tree)).toEqual([
+      { "definitions/": [{ "marts/": ["fct"] }, { "staging/": ["stg_a", "stg_b"] }, "top"] },
+    ]);
+  });
+
+  it("compacts a chain of folders that hold only one subfolder", async () => {
+    const { tree } = folderTree(
+      graphOf(at("a", "definitions/sources/raw"), at("b", "definitions/sources/raw")),
+    );
+    expect(await shape(tree)).toEqual([{ "definitions/sources/raw/": ["a", "b"] }]);
+  });
+
+  it("lists actions in the project root after the folders", async () => {
+    const { tree } = folderTree(
+      graphOf(node("root_op", "operations", { filePath: "/proj/root_op.sqlx" }), at("a", "definitions")),
+    );
+    expect(await shape(tree)).toEqual([{ "definitions/": ["a"] }, "root_op"]);
+  });
+
+  it("shapes a folder row with its path, descendant count, and folder icon", async () => {
+    const { tree } = folderTree(
+      graphOf(at("a", "definitions/staging"), at("b", "definitions/marts"), at("c", "definitions")),
+    );
+    const [folder] = await tree.getChildren();
+    const item = tree.getTreeItem(folder) as TreeItem;
+    expect(item.label).toBe("definitions");
+    expect(item.id).toBe("folder:/proj/definitions");
+    expect(item.description).toBe("3");
+    expect(item.iconPath).toEqual(ThemeIcon.Folder);
+    expect(item.resourceUri?.fsPath).toBe("/proj/definitions");
+    expect(item.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+  });
+
+  it("keeps node rows identical to the type grouping", async () => {
+    const { tree } = folderTree(graphOf(at("a", "definitions", "view")));
+    const [folder] = await tree.getChildren();
+    const [leaf] = await tree.getChildren(folder);
+    const item = tree.getTreeItem(leaf) as TreeItem;
+    expect(item.id).toBe("node:a");
+    expect(item.contextValue).toBe(NODE_CONTEXT_VALUE);
+    expect(item.command).toMatchObject({ command: "dataformDag.revealNode", arguments: [leaf] });
+  });
+
+  it("falls back to the nodes' common directory without a workspace root", async () => {
+    const { store, tree } = folderTree(graphOf(at("a", "definitions/x"), at("b", "definitions/y")));
+    store.workspaceRoot = () => undefined;
+    expect(await shape(tree)).toEqual([{ "x/": ["a"] }, { "y/": ["b"] }]);
+  });
+
+  it("refreshes when the grouping changes, and switching back restores type groups", async () => {
+    const { tree } = providerFor(graphOf(at("a", "definitions")));
+    const changed = vi.fn();
+    tree.onDidChangeTreeData(changed);
+
+    tree.setGrouping("folder");
+    expect(changed).toHaveBeenCalledWith(undefined);
+    tree.setGrouping("folder");
+    expect(changed).toHaveBeenCalledTimes(1);
+
+    tree.setGrouping("type");
+    expect(groupTypes(await tree.getChildren())).toEqual(["table"]);
   });
 });
 

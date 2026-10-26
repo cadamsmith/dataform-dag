@@ -306,6 +306,7 @@ export class TreeItem {
 }
 
 export class ThemeIcon {
+  static readonly Folder = new ThemeIcon("folder");
   constructor(public readonly id: string) {}
 }
 

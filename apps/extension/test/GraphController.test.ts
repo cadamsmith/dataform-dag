@@ -113,6 +113,8 @@ describe("activate", () => {
   it("registers every contributed command", () => {
     activateAndShow();
     expect([...records.commands.keys()].sort()).toEqual([
+      "dataformDag.groupByFolder",
+      "dataformDag.groupByType",
       "dataformDag.refresh",
       "dataformDag.revealNode",
       "dataformDag.showCompiledSql",
@@ -123,9 +125,29 @@ describe("activate", () => {
   it("registers the activity-bar tree view and disposes everything it owns", () => {
     const context = activateAndShow();
     expect(lastTreeView().id).toBe("dataformDag.nodes");
-    // 4 commands + the tree view + its status subscription + the tree provider + the controller +
+    // 6 commands + the tree view + its status subscription + the tree provider + the controller +
     // the store
-    expect(context.subscriptions).toHaveLength(9);
+    expect(context.subscriptions).toHaveLength(11);
+  });
+
+  it("toggles the tree grouping, persisting it and updating the title-bar context", () => {
+    const context = activateAndShow();
+    expect(records.executed).toContainEqual(["setContext", "dataformDag.treeGrouping", "type"]);
+
+    records.commands.get("dataformDag.groupByFolder")!();
+    expect(records.executed).toContainEqual(["setContext", "dataformDag.treeGrouping", "folder"]);
+    expect(context.workspaceState.get("dataformDag.treeGrouping")).toBe("folder");
+  });
+
+  it("restores the saved tree grouping on activate", async () => {
+    const context = fakeContext();
+    await context.workspaceState.update("dataformDag.treeGrouping", "folder");
+    activate(context as never);
+    await vi.waitFor(() => expect(compileMock).toHaveBeenCalledTimes(1));
+    await flush();
+    const roots = (await lastTreeView().provider.getChildren()) as Array<{ kind: string }>;
+    expect(roots.map((r) => r.kind)).toEqual(["node", "node"]);
+    expect(records.executed).toContainEqual(["setContext", "dataformDag.treeGrouping", "folder"]);
   });
 
   it("compiles eagerly, before any view is opened", async () => {

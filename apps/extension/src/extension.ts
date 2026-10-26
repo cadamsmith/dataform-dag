@@ -1,20 +1,30 @@
 import * as vscode from "vscode";
 import type { InboundMsg, OutboundMsg } from "@dataform-dag/ui";
-import { DagTreeProvider, type TreeEntry } from "./dagTreeProvider.js";
+import { DagTreeProvider, type TreeEntry, type TreeGrouping } from "./dagTreeProvider.js";
 import { GraphStore, type CompilationState } from "./graphStore.js";
 
 const COMMAND_SHOW_GRAPH = "dataformDag.showGraph";
 const COMMAND_SHOW_COMPILED_SQL = "dataformDag.showCompiledSql";
 const COMMAND_REFRESH = "dataformDag.refresh";
 const COMMAND_REVEAL_NODE = "dataformDag.revealNode";
+const COMMAND_GROUP_BY_FOLDER = "dataformDag.groupByFolder";
+const COMMAND_GROUP_BY_TYPE = "dataformDag.groupByType";
 const VIEW_NODES = "dataformDag.nodes";
 const TAG_FILTER_KEY = "dataformDag.selectedTags";
+/** Both the workspaceState key and the context key the view title's toggle button reads. */
+const TREE_GROUPING_KEY = "dataformDag.treeGrouping";
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new GraphStore();
   const controller = new GraphController(context, store);
   const tree = new DagTreeProvider(store);
   const treeView = vscode.window.createTreeView(VIEW_NODES, { treeDataProvider: tree });
+  const setGrouping = (grouping: TreeGrouping): void => {
+    tree.setGrouping(grouping);
+    void context.workspaceState.update(TREE_GROUPING_KEY, grouping);
+    void vscode.commands.executeCommand("setContext", TREE_GROUPING_KEY, grouping);
+  };
+  setGrouping(context.workspaceState.get(TREE_GROUPING_KEY) === "folder" ? "folder" : "type");
   context.subscriptions.push(
     vscode.commands.registerCommand(COMMAND_SHOW_GRAPH, () => controller.show()),
     vscode.commands.registerCommand(COMMAND_SHOW_COMPILED_SQL, (arg?: unknown) =>
@@ -24,6 +34,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_REVEAL_NODE, (arg?: unknown) =>
       controller.revealNode(nodeOf(arg)),
     ),
+    vscode.commands.registerCommand(COMMAND_GROUP_BY_FOLDER, () => setGrouping("folder")),
+    vscode.commands.registerCommand(COMMAND_GROUP_BY_TYPE, () => setGrouping("type")),
     treeView,
     // The tree has no pill of its own, so a failure that left the last good graph listed is
     // stated in the view's message instead.
