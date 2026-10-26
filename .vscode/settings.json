@@ -1,0 +1,5 @@
+{
+  // The js-debug network view sends `Network.enable` to the Extension Development Host, which
+  // trips a node::Assert in the editor's inspector and aborts the host on F5 (exit code 6).
+  "debug.javascript.enableNetworkView": false
+}
