@@ -12,6 +12,8 @@ raw_sessions ─┐
 raw_observations ─┼─▶ stg_* ─▶ int_session_quality ─┬─▶ fct_observations ─▶ agg_nightly_summary
 raw_objects ──┘                   └─▶ dim_objects ──┘                              │
                                                                     grant_reporting_access
+
+fct_observations + dim_objects + raw_catalogue_aliases ─▶ obs_messier, obs_ngc   (defined in JS)
 ```
 
 ## Running it
@@ -27,22 +29,23 @@ contacts BigQuery. `defaultProject: starlog-demo` is a placeholder that no query
 
 | Feature | Where to look |
 | --- | --- |
-| All six node types | `source` (3 declarations), `view`, `table`, `incremental`, `assertion`, `operations` |
+| All six node types | `source` (4 declarations), `view`, `table`, `incremental`, `assertion`, `operations` |
 | Tag filtering | 8 tags across the project: `staging`, `intermediate`, `marts`, `core`, `reference`, `reporting`, `quality`, `ops` |
-| Node search | 20 actions, several sharing prefixes (`stg_`, `raw_`) so partial matches return more than one |
+| Node search | 24 actions, several sharing prefixes (`stg_`, `raw_`) so partial matches return more than one |
 | `config.dependencies`, array form | `intermediate/int_session_quality.sqlx` — depends on `stg_objects` with no `ref()` to it |
 | `config.dependencies`, bare string | `operations/grant_reporting_access.sqlx` |
 | `config.dependencies`, target object | `assertions/assert_observations_have_session.sqlx` |
 | Compiled SQL: incremental variants | `marts/fct_observations.sqlx` compiles all six section kinds — `query`, `incremental query`, and both pre/post operation pairs |
 | Compiled SQL: multi-statement | `operations/grant_reporting_access.sqlx` compiles to 3 numbered statements |
 | One file → several actions | `marts/dim_objects.sqlx` has inline `config.assertions`, so it compiles to a table **plus two generated assertion nodes**. Selecting the file must resolve to the table, not to an assertion |
-| Assertion grouping | **Three clusters** — 3 assertions off `fct_observations`, 2 off `agg_nightly_summary`, 2 off `dim_objects` — beside **two singletons** that must stay ordinary nodes. See below |
+| Actions defined in JS | `reporting/catalogue_views.js` compiles to **four** actions: a declaration, two views generated in a loop, and an assertion. Each is its own node; the declaration's compiled SQL is empty rather than a sibling view's |
+| Assertion grouping | **Three clusters** — 3 assertions off `fct_observations`, 2 off `agg_nightly_summary`, 2 off `dim_objects` — beside **three singletons** that must stay ordinary nodes. See below |
 | Diagnostics | None by design: a `ref()` in commented-out SQL (`marts/agg_nightly_summary.sqlx`) is ignored by compile. See below |
 
 ## Assertion grouping
 
-The project compiles to **20 actions, 9 of them assertions**. The canvas collapses assertions that share
-a position (identical dependencies), so it draws **16 nodes**:
+The project compiles to **24 actions, 10 of them assertions**. The canvas collapses assertions that share
+a position (identical dependencies), so it draws **20 nodes**:
 
 | Position | Assertions | On the canvas |
 | --- | --- | --- |
@@ -51,6 +54,7 @@ a position (identical dependencies), so it draws **16 nodes**:
 | `dim_objects` | 2 | one "2 assertions" node |
 | `int_session_quality` | 1 | stays an ordinary node |
 | `fct_observations` + `stg_sessions` | 1 (`assert_observations_have_session`) | stays an ordinary node — a different dependency set is a different position, even though it shares one parent with the cluster above |
+| `raw_catalogue_aliases` + `dim_objects` | 1 (`assert_aliases_resolve`, from JS) | stays an ordinary node |
 
 The last row is the case worth clicking: sharing *a* parent is not sharing a position.
 
