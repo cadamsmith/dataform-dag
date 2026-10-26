@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DataformNode, SerializedGraph } from "@dataform-dag/core";
-import { lineageOf } from "../src/lineage.js";
+import { depthWithin, lineageOf } from "../src/lineage.js";
 import { restrictGraph } from "../src/filterGraph.js";
 
 /**
@@ -93,5 +93,26 @@ describe("restrictGraph", () => {
       ["stg", ["fct"]],
       ["fct", ["agg"]],
     ]);
+  });
+});
+
+describe("depthWithin", () => {
+  const fan = graphOf([
+    ["a", "b"],
+    ["b", "c"],
+    ["c", "d1"],
+    ["c", "d2"],
+    ["c", "d3"],
+    ["c", "d4"],
+    ["c", "d5"],
+  ]);
+  it("is null when the whole lineage fits", () => {
+    expect(depthWithin(fan, ["a"], 8)).toBeNull();
+  });
+  it("is the deepest limit that still fits", () => {
+    expect(depthWithin(fan, ["a"], 4)).toBe(2);
+  });
+  it("never goes below one hop", () => {
+    expect(depthWithin(fan, ["c"], 2)).toBe(1);
   });
 });

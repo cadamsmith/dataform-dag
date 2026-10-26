@@ -23,6 +23,11 @@ export type InboundMsg =
   | { type: "focusNode"; nodeId: string }
   /** Enter focus mode on a node: show only its lineage. (`focusNode` above just pans to it.) */
   | { type: "focusLineage"; nodeId: string }
+  /**
+   * Where the user is starting from (the file open when the panel opened). Only a large project's
+   * start screen acts on it, by focusing that node; otherwise it is ignored, never panned to.
+   */
+  | { type: "startFrom"; nodeId: string }
   | { type: "compilationStatus"; status: CompilationStatus; message?: string }
   | { type: "compiledSqlResult"; nodeId: string; sections: CompiledSqlSection[] }
   | { type: "compiledSqlError"; nodeId: string; message: string }

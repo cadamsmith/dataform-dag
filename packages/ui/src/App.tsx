@@ -4,7 +4,7 @@ import type { CompilationStatus, HostBridge } from "./HostBridge.js";
 import { useHostBridge } from "./useHostBridge.js";
 import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf } from "./graphToFlow.js";
 import { filterGraphWithContext, restrictGraph, tagCounts } from "./filterGraph.js";
-import { lineageOf } from "./lineage.js";
+import { depthWithin, lineageOf } from "./lineage.js";
 import { collapseAssertions, isClusterId, type CollapsedGraph } from "./collapseAssertions.js";
 import { useLayout } from "./useLayout.js";
 import { DagGraph } from "./DagGraph.js";
@@ -16,6 +16,12 @@ import { NodeSearch } from "./NodeSearch.js";
 import { ActiveTags, TagFilter } from "./TagFilter.js";
 import { TypeIcon } from "./TypeIcon.js";
 import "./app.css";
+
+/**
+ * Above this many nodes the panel opens on a start screen rather than laying out the whole project,
+ * and focus mode limits its depth so the lineage it draws stays about this size.
+ */
+export const LARGE_GRAPH = 300;
 
 export interface AppProps {
   bridge: HostBridge;
@@ -33,6 +39,7 @@ export function App({ bridge }: AppProps): JSX.Element {
     graph,
     focusRequest,
     lineageRequest,
+    startRequest,
     compilationStatus,
     compilationMessage,
     compiledSql,
@@ -48,6 +55,8 @@ export function App({ bridge }: AppProps): JSX.Element {
   const [lineage, setLineage] = useState<string[] | null>(null);
   /** Hops each way from the focused node(s); null shows the whole lineage. */
   const [lineageDepth, setLineageDepth] = useState<number | null>(null);
+  /** The user asked for the whole of a large project anyway. */
+  const [showAll, setShowAll] = useState(false);
   const { capabilities } = bridge;
 
   // The host owns persistence, not the filter itself: it sends `tagFilterState` once on restore and
@@ -78,7 +87,11 @@ export function App({ bridge }: AppProps): JSX.Element {
   useEffect(() => {
     if (lineage && visibleGraph && !focused) setLineage(null);
   }, [lineage, visibleGraph, focused]);
-  const shownGraph = focused?.graph ?? visibleGraph;
+  // A large project with nothing chosen yet draws nothing: no layout runs until the user picks a
+  // node, a tag, or "show all". Every way out of focus mode lands back here too.
+  const atStart =
+    !!graph && graph.nodes.length > LARGE_GRAPH && !showAll && !focused && selectedTags.length === 0;
+  const shownGraph = atStart ? null : (focused?.graph ?? visibleGraph);
   // filter (tags → lineage) → collapse → layout. Collapsing after the filters is what keeps a
   // cluster describing only the assertions still on screen. It runs even when grouping is off — it
   // is O(nodes), and its result is what tells us whether there is anything to group at all.
@@ -123,10 +136,18 @@ export function App({ bridge }: AppProps): JSX.Element {
   useEffect(() => {
     if (!focusRequest || focusRequest.nonce === handledFocus.current) return;
     handledFocus.current = focusRequest.nonce;
+    // On the start screen there is nothing to pan to: the node the host points at (the file open in
+    // the editor) becomes the starting point instead.
+    if (atStart) {
+      enterFocus([focusRequest.nodeId], focusRequest.nodeId);
+      return;
+    }
     jumpTo(focusRequest.nodeId);
     const clusterId = collapsed?.clusterOf.get(focusRequest.nodeId);
     if (clusterId) setSelection({ canvasId: clusterId, memberId: focusRequest.nodeId });
-  }, [focusRequest, collapsed]);
+    // enterFocus is recreated every render and only reads state; the request is what drives this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest, collapsed, atStart]);
 
   const focus = useMemo(() => {
     if (!jump) return null;
@@ -136,6 +157,10 @@ export function App({ bridge }: AppProps): JSX.Element {
 
   /** Search picks a node to look at: select it AND bring it into view. */
   const selectAndJump = (nodeId: string): void => {
+    if (atStart) {
+      enterFocus([nodeId], nodeId);
+      return;
+    }
     select(nodeId);
     jumpTo(nodeId);
   };
@@ -148,8 +173,12 @@ export function App({ bridge }: AppProps): JSX.Element {
    */
   const focusOn = (canvasId: string): void => {
     const members = collapsed?.members.get(canvasId);
-    setLineage(members ? members.map((m) => m.id) : [canvasId]);
-    setLineageDepth(null);
+    enterFocus(members ? members.map((m) => m.id) : [canvasId], canvasId);
+  };
+  /** Starts unbounded unless that would draw a large project's worth of nodes — see LARGE_GRAPH. */
+  const enterFocus = (ids: string[], canvasId: string): void => {
+    setLineage(ids);
+    setLineageDepth(visibleGraph ? depthWithin(visibleGraph, ids, LARGE_GRAPH) : null);
     setSelection({ canvasId, memberId: null });
   };
   const exitFocus = (): void => setLineage(null);
@@ -158,10 +187,17 @@ export function App({ bridge }: AppProps): JSX.Element {
   useEffect(() => {
     if (!lineageRequest || lineageRequest.nonce === handledLineage.current) return;
     handledLineage.current = lineageRequest.nonce;
-    setLineage([lineageRequest.nodeId]);
-    setLineageDepth(null);
-    setSelection({ canvasId: lineageRequest.nodeId, memberId: null });
+    enterFocus([lineageRequest.nodeId], lineageRequest.nodeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineageRequest]);
+
+  const handledStart = useRef(0);
+  useEffect(() => {
+    if (!startRequest || startRequest.nonce === handledStart.current) return;
+    handledStart.current = startRequest.nonce;
+    if (atStart) enterFocus([startRequest.nodeId], startRequest.nodeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startRequest, atStart]);
 
   // Escape leaves focus mode. On `window`, so it runs after the popovers' document listeners: an
   // Escape that closed a menu arrives here already `defaultPrevented` and is ignored.
@@ -265,9 +301,9 @@ export function App({ bridge }: AppProps): JSX.Element {
         </div>
         <div className="ddag-topbar__meta">
           {shownGraph && <Legend nodes={shownGraph.nodes} />}
-          {collapsed && graph && (
+          {graph && (
             <span className="ddag-topbar__count">
-              {collapsed.graph.nodes.length === graph.nodes.length
+              {!collapsed || collapsed.graph.nodes.length === graph.nodes.length
                 ? `${graph.nodes.length} nodes`
                 : `${collapsed.graph.nodes.length} of ${graph.nodes.length} nodes`}
             </span>
@@ -309,7 +345,13 @@ export function App({ bridge }: AppProps): JSX.Element {
       )}
       <div className="ddag-body">
         <main className="ddag-canvas">
-          {flow ? (
+          {atStart ? (
+            <StartScreen
+              nodeCount={graph.nodes.length}
+              followsEditor={capabilities.focusOnActive}
+              onShowAll={() => setShowAll(true)}
+            />
+          ) : flow ? (
             <DagGraph
               graph={flow}
               selectedId={selection?.canvasId ?? null}
@@ -323,10 +365,15 @@ export function App({ bridge }: AppProps): JSX.Element {
               }|${lineageDepth}`}
             />
           ) : (
-            <EmptyState status={compilationStatus} message={compilationMessage} />
+            <EmptyState
+              status={compilationStatus}
+              message={compilationMessage}
+              laying={shownGraph?.nodes.length ?? null}
+            />
           )}
         </main>
-        {clusterMembers && index && selection && (
+        {/* Leaving focus keeps the selection, but on the start screen nothing it names is drawn. */}
+        {!atStart && clusterMembers && index && selection && (
           <ClusterDetailPanel
             members={clusterMembers}
             upstream={clusterNeighbors?.upstream ?? []}
@@ -346,7 +393,7 @@ export function App({ bridge }: AppProps): JSX.Element {
             compiledSqlError={compiledSqlError}
           />
         )}
-        {selected && index && (
+        {!atStart && selected && index && (
           <NodeDetailPanel
             node={selected}
             upstream={upstreamOf(index, selected.id)}
@@ -415,14 +462,56 @@ function CompileStatus({
   );
 }
 
-/** What the canvas shows before the first successful compile. */
+/**
+ * What a large project opens on: an invitation to pick a starting point, since drawing (and laying
+ * out) every node at once is slow to produce and too dense to read.
+ */
+function StartScreen({
+  nodeCount,
+  followsEditor,
+  onShowAll,
+}: {
+  nodeCount: number;
+  followsEditor: boolean;
+  onShowAll: () => void;
+}): JSX.Element {
+  return (
+    <div className="ddag-empty">
+      <div className="ddag-empty__box ddag-start">
+        <strong>{nodeCount.toLocaleString()} nodes — pick a place to start.</strong>
+        <p>
+          {followsEditor ? "Open a model's file, search" : "Search"} for a node (<kbd>/</kbd>), or
+          filter by tag above. The graph then shows that node's lineage.
+        </p>
+        <button type="button" className="ddag-btn" onClick={onShowAll}>
+          Show all {nodeCount.toLocaleString()} nodes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** What the canvas shows before the first successful compile, or while a layout is computing. */
 function EmptyState({
   status,
   message,
+  laying,
 }: {
   status: CompilationStatus;
   message: string | null;
+  /** Node count of a graph that is being laid out, or null when there is no graph yet. */
+  laying: number | null;
 }): JSX.Element {
+  if (laying !== null) {
+    return (
+      <div className="ddag-empty">
+        <div className="ddag-empty__box ddag-empty__box--quiet">
+          <span className="ddag-empty__pulse" aria-hidden="true" />
+          Laying out {laying.toLocaleString()} nodes…
+        </div>
+      </div>
+    );
+  }
   if (status === "cli-missing") {
     return (
       <div className="ddag-empty">

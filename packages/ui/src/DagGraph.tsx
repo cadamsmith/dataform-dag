@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BaseEdge,
   Background,
@@ -44,7 +44,7 @@ export interface DagGraphProps {
   fitKey?: string;
 }
 
-type ModelNodeData = {
+export type ModelNodeData = {
   label: string;
   color: string;
   nodeType: NodeType;
@@ -177,6 +177,8 @@ const NO_ROOTS: string[] = [];
 /** Framing for every fit. The zoom cap keeps a filter down to two nodes from blowing them up 2×. */
 const FIT = { padding: 0.2, maxZoom: 1.25 };
 
+const minimapColor = (n: Node): string => (n.data as ModelNodeData).color;
+
 /** Should the viewer's motion preference allow the animated fit after a filter change? */
 const prefersReducedMotion = (): boolean =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -207,24 +209,10 @@ function DagCanvas({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const roots = useMemo(() => new Set(rootIds), [rootIds]);
   const contextSet = useMemo(() => new Set(contextIds), [contextIds]);
-  // The node whose relationships we emphasize: hover wins over selection so you can trace by pointing.
-  // A selected focus root doesn't dim anything: in focus mode everything on screen IS its lineage,
-  // and dimming all but its direct neighbors would grey out the rest of what you asked to see.
-  const focusId = hoveredId ?? (selectedId && !roots.has(selectedId) ? selectedId : null);
-  // Edges touching the focused node, and the neighbor set to keep bright while the rest fade.
-  const { activeEdges, activeNodes } = useMemo(() => {
-    if (!focusId) return { activeEdges: null, activeNodes: null };
-    const e = new Set<string>();
-    const n = new Set<string>([focusId]);
-    for (const edge of graph.edges) {
-      if (edge.source === focusId || edge.target === focusId) {
-        e.add(edge.id);
-        n.add(edge.source);
-        n.add(edge.target);
-      }
-    }
-    return { activeEdges: e, activeNodes: n };
-  }, [focusId, graph.edges]);
+  const emphasis = useMemo(
+    () => emphasisFor(graph.edges, selectedId, hoveredId, roots, contextSet),
+    [graph.edges, selectedId, hoveredId, roots, contextSet],
+  );
   const { fitView, getViewport, setViewport, setCenter } = useReactFlow();
   const storeApi = useStoreApi();
   // fitKey is read through a ref so a filter change arms the NEXT layout, which lands asynchronously.
@@ -307,35 +295,12 @@ function DagCanvas({
   // `graph` is a dependency too: the build effect above resets every flag when a layout lands, and
   // layouts land asynchronously, AFTER the render that changed the selection/root/context sets —
   // without it, emphasis applied to the old nodes would be wiped and never reapplied.
+  // Only nodes/edges whose flags change get a new object, so a hover re-renders a handful of
+  // elements rather than the whole project.
   useEffect(() => {
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        data: {
-          ...n.data,
-          selected: n.id === selectedId,
-          dimmed: activeNodes != null && !activeNodes.has(n.id),
-          root: roots.has(n.id),
-          context: contextSet.has(n.id),
-        },
-      })),
-    );
-    setEdges((eds) =>
-      eds.map((e) => {
-        const active = activeEdges != null && activeEdges.has(e.id);
-        const faded = activeEdges != null && !active;
-        return {
-          ...e,
-          // React Flow's own `animated` dash, running source → target: on hover it shows which
-          // way data moves through the node you're pointing at.
-          animated: active,
-          className: active ? "is-active" : faded ? "is-faded" : undefined,
-          data: { ...e.data, active },
-          zIndex: active ? 10 : 0,
-        };
-      }),
-    );
-  }, [graph, selectedId, activeEdges, activeNodes, roots, contextSet, setNodes, setEdges]);
+    setNodes((nds) => emphasizeNodes(nds, emphasis));
+    setEdges((eds) => emphasizeEdges(eds, emphasis));
+  }, [graph, emphasis, setNodes, setEdges]);
   // Each jump pans once. Re-panning on every relayout would undo the fit/anchor above; a jump whose
   // node isn't laid out yet (a filter just changed) waits for the layout that has it.
   const jumped = useRef(0);
@@ -354,6 +319,18 @@ function DagCanvas({
     );
     return () => cancelAnimationFrame(frame);
   }, [focus, graph.nodes, setCenter]);
+  // React Flow hands these straight to every node wrapper, so a new function per render re-renders
+  // every node on each hover. Held stable; the latest props are read through a ref.
+  const handlers = useRef({ onSelectNode, onFocusNode });
+  handlers.current = { onSelectNode, onFocusNode };
+  const onNodeClick = useCallback((_: unknown, node: Node) => handlers.current.onSelectNode(node.id), []);
+  const onNodeDoubleClick = useCallback(
+    (_: unknown, node: Node) => handlers.current.onFocusNode?.(node.id),
+    [],
+  );
+  const onPaneClick = useCallback(() => handlers.current.onSelectNode(null), []);
+  const onNodeMouseEnter = useCallback((_: unknown, node: Node) => setHoveredId(node.id), []);
+  const onNodeMouseLeave = useCallback(() => setHoveredId(null), []);
   return (
     // data-relayout flips on each relayout, and app.css gives each value its own (identical) fade
     // keyframes, so the fade replays: new positions land in one frame, and a short fade reads as
@@ -367,13 +344,13 @@ function DagCanvas({
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={(_, node) => onSelectNode(node.id)}
-        onNodeDoubleClick={(_, node) => onFocusNode?.(node.id)}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         // Double-click on a node means "focus it"; zooming on it too would fight the fit that follows.
         zoomOnDoubleClick={false}
-        onPaneClick={() => onSelectNode(null)}
-        onNodeMouseEnter={(_, node) => setHoveredId(node.id)}
-        onNodeMouseLeave={() => setHoveredId(null)}
+        onPaneClick={onPaneClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         nodesDraggable={false}
         nodesConnectable={false}
         minZoom={0.2}
@@ -387,7 +364,7 @@ function DagCanvas({
           pannable
           zoomable
           position="bottom-right"
-          nodeColor={(n) => (n.data as ModelNodeData).color}
+          nodeColor={minimapColor}
           nodeBorderRadius={4}
           maskColor="var(--ddag-minimap-mask)"
         />
@@ -421,4 +398,92 @@ export function anchorBetween(
     }
   }
   return best ? pick(best) : null;
+}
+
+/** How each node and edge is drawn, given the selection and the hovered node. */
+export interface Emphasis {
+  selectedId: string | null;
+  /** Nodes kept bright while a selection dims the rest; null when nothing is dimmed. */
+  bright: ReadonlySet<string> | null;
+  /** Edges drawn active (highlighted, animated): the hovered node's, else the selection's. */
+  activeEdges: ReadonlySet<string> | null;
+  /** Edges a selection keeps at full strength; every other edge fades. Null when nothing fades. */
+  keptEdges: ReadonlySet<string> | null;
+  roots: ReadonlySet<string>;
+  context: ReadonlySet<string>;
+}
+
+/**
+ * Only a SELECTION dims the canvas. Hover just brightens: the hovered node's edges go active and its
+ * neighbors are lifted out of any dimming. Dimming on hover made a zoomed-out project of a thousand
+ * nodes blink to near-invisible every time the pointer crossed a node.
+ *
+ * A selected focus root doesn't dim anything: in focus mode everything on screen IS its lineage, and
+ * dimming all but its direct neighbors would grey out the rest of what you asked to see.
+ */
+export function emphasisFor(
+  edges: { id: string; source: string; target: string }[],
+  selectedId: string | null,
+  hoveredId: string | null,
+  roots: ReadonlySet<string>,
+  context: ReadonlySet<string>,
+): Emphasis {
+  const neighborhood = (id: string | null) => {
+    if (!id) return null;
+    const e = new Set<string>();
+    const n = new Set<string>([id]);
+    for (const edge of edges) {
+      if (edge.source === id || edge.target === id) {
+        e.add(edge.id);
+        n.add(edge.source);
+        n.add(edge.target);
+      }
+    }
+    return { edges: e, nodes: n };
+  };
+  const sel = neighborhood(selectedId && !roots.has(selectedId) ? selectedId : null);
+  const hov = neighborhood(hoveredId);
+  return {
+    selectedId,
+    bright: sel ? new Set([...sel.nodes, ...(hov?.nodes ?? [])]) : null,
+    activeEdges: (hov ?? sel)?.edges ?? null,
+    keptEdges: sel ? new Set([...sel.edges, ...(hov?.edges ?? [])]) : null,
+    roots,
+    context,
+  };
+}
+
+/** Apply {@link Emphasis} to nodes, returning the SAME object for every node whose flags hold. */
+export function emphasizeNodes<N extends Node<ModelNodeData>>(nodes: N[], em: Emphasis): N[] {
+  return nodes.map((n) => {
+    const selected = n.id === em.selectedId;
+    const dimmed = em.bright != null && !em.bright.has(n.id);
+    const root = em.roots.has(n.id);
+    const context = em.context.has(n.id);
+    const d = n.data;
+    if (d.selected === selected && d.dimmed === dimmed && d.root === root && d.context === context) {
+      return n;
+    }
+    return { ...n, data: { ...d, selected, dimmed, root, context } };
+  });
+}
+
+/** Apply {@link Emphasis} to edges, returning the SAME object for every edge whose flags hold. */
+export function emphasizeEdges(edges: Edge[], em: Emphasis): Edge[] {
+  return edges.map((e) => {
+    const active = em.activeEdges != null && em.activeEdges.has(e.id);
+    const faded = !active && em.keptEdges != null && !em.keptEdges.has(e.id);
+    const className = active ? "is-active" : faded ? "is-faded" : undefined;
+    const wasActive = (e.data as { active?: boolean } | undefined)?.active ?? false;
+    if (wasActive === active && e.className === className) return e;
+    return {
+      ...e,
+      // React Flow's own `animated` dash, running source → target: on hover it shows which way
+      // data moves through the node you're pointing at.
+      animated: active,
+      className,
+      data: { ...e.data, active },
+      zIndex: active ? 10 : 0,
+    };
+  });
 }

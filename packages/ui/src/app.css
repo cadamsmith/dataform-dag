@@ -896,6 +896,15 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .ddag-app {
   margin: 6px 0 0;
   color: var(--ddag-muted);
 }
+.ddag-start .ddag-btn {
+  margin-top: 14px;
+}
+.ddag-start kbd {
+  padding: 0 4px;
+  border: 1px solid var(--ddag-border);
+  border-radius: 3px;
+  font: 11px var(--ddag-mono);
+}
 .ddag-empty__box--quiet {
   display: inline-flex;
   align-items: center;

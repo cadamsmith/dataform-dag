@@ -33,7 +33,7 @@ vi.mock("../src/DagGraph.js", () => ({
   ),
 }));
 
-import { App } from "../src/App.js";
+import { App, LARGE_GRAPH } from "../src/App.js";
 import { MockBridge } from "../src/MockBridge.js";
 
 const graph: SerializedGraph = {
@@ -586,5 +586,102 @@ describe("focus mode", () => {
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Filter by tag" })).toBeNull();
     expect(focusBar()).not.toBeNull();
+  });
+});
+
+/** `src ─▶ core ─▶ m0…mN`: just over the start-screen threshold. */
+const wide: SerializedGraph = (() => {
+  const leaves = Array.from({ length: LARGE_GRAPH }, (_, i) => `m${i}`);
+  return {
+    nodes: [
+      { id: "src", filePath: "src.sqlx", type: "source", tags: [], refs: [] },
+      { id: "core", filePath: "core.sqlx", type: "table", tags: [], refs: ["src"] },
+      ...leaves.map((id) => ({
+        id,
+        filePath: `${id}.sqlx`,
+        type: "table" as const,
+        tags: id === "m1" ? ["one"] : [],
+        refs: ["core"],
+      })),
+    ],
+    downstream: [
+      ["src", ["core"]],
+      ["core", leaves],
+    ],
+    issues: [],
+  };
+})();
+const wideCount = `${(LARGE_GRAPH + 2).toLocaleString()} nodes`;
+
+describe("App on a large project", () => {
+  const focusBar = () => screen.queryByRole("region", { name: "Focus mode" });
+
+  it("opens on the start screen and draws nothing", async () => {
+    render(<App bridge={new MockBridge(wide)} />);
+    expect(await screen.findByText(/pick a place to start/)).toBeInTheDocument();
+    expect(screen.getByText(wideCount)).toBeInTheDocument();
+    expect(screen.queryByTestId("canvas")).toBeNull();
+  });
+
+  it("starts from the lineage of the node the host starts from", async () => {
+    const bridge = new MockBridge(wide);
+    render(<App bridge={bridge} />);
+    await screen.findByText(/pick a place to start/);
+    act(() => bridge.emit({ type: "startFrom", nodeId: "m5" }));
+    expect(await screen.findByText(`3 of ${wideCount}`)).toBeInTheDocument();
+    expect(focusBar()).not.toBeNull();
+  });
+
+  it("starts from a node the host focuses while the start screen is up (an editor switch)", async () => {
+    const bridge = new MockBridge(wide);
+    render(<App bridge={bridge} />);
+    await screen.findByText(/pick a place to start/);
+    act(() => bridge.emit({ type: "focusNode", nodeId: "m5" }));
+    expect(await screen.findByText(`3 of ${wideCount}`)).toBeInTheDocument();
+  });
+
+  it("ignores startFrom on a small project", async () => {
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    act(() => bridge.emit({ type: "startFrom", nodeId: "mid" }));
+    expect(screen.getByText("2 nodes")).toBeInTheDocument();
+    expect(focusBar()).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("starts from a searched node, and goes back to the start screen on leaving focus", async () => {
+    render(<App bridge={new MockBridge(wide)} />);
+    await screen.findByText(/pick a place to start/);
+    await userEvent.type(screen.getByRole("combobox", { name: "Find a node" }), "m7{Enter}");
+    expect(await screen.findByText(`3 of ${wideCount}`)).toBeInTheDocument();
+    await userEvent.click(within(focusBar()!).getByRole("button", { name: "Exit focus" }));
+    expect(await screen.findByText(/pick a place to start/)).toBeInTheDocument();
+    // The node stays selected, but its panel would describe something that isn't drawn.
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("limits a focus whose whole lineage is a large project's worth of nodes", async () => {
+    const bridge = new MockBridge(wide);
+    render(<App bridge={bridge} />);
+    await screen.findByText(/pick a place to start/);
+    act(() => bridge.emit({ type: "focusLineage", nodeId: "src" }));
+    // One hop: just core. Unbounded would have been every node.
+    expect(await screen.findByText(`2 of ${wideCount}`)).toBeInTheDocument();
+  });
+
+  it("draws a tag filter's matches without asking first", async () => {
+    const bridge = new MockBridge(wide);
+    render(<App bridge={bridge} />);
+    await screen.findByText(/pick a place to start/);
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["one"] }));
+    expect(await screen.findByText(`1 of ${wideCount}`)).toBeInTheDocument();
+  });
+
+  it("draws everything on Show all", async () => {
+    render(<App bridge={new MockBridge(wide)} />);
+    await userEvent.click(await screen.findByRole("button", { name: /^Show all/ }));
+    expect(await screen.findByTestId("canvas")).toBeInTheDocument();
+    expect(screen.getByText(wideCount)).toBeInTheDocument();
   });
 });

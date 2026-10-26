@@ -90,13 +90,21 @@ class GraphController implements vscode.Disposable {
   private ready = false;
   /** A focus-mode request made before the webview was ready, delivered on `ready`. */
   private pendingLineage: string | undefined;
+  /**
+   * The file in the editor when the panel was opened, pointed at once the panel has a graph. Read
+   * before the panel exists: the panel opens over that editor, so it is no longer active by `ready`.
+   */
+  private openedFrom: string | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly store: GraphStore,
   ) {
     this.storeSubscriptions.push(
-      store.onDidChangeGraph((graph) => this.post({ type: "graphUpdate", graph })),
+      store.onDidChangeGraph((graph) => {
+        this.post({ type: "graphUpdate", graph });
+        if (this.ready) this.pointAtOpenedFrom();
+      }),
       store.onDidChangeCompilationStatus((state) =>
         this.post({ type: "compilationStatus", ...state }),
       ),
@@ -108,6 +116,7 @@ class GraphController implements vscode.Disposable {
       this.panel.reveal();
       return;
     }
+    this.openedFrom = vscode.window.activeTextEditor?.document.uri.fsPath;
     const panel = vscode.window.createWebviewPanel(
       "dataformDag",
       "Dataform DAG",
@@ -150,9 +159,12 @@ class GraphController implements vscode.Disposable {
         if (this.store.current) this.post({ type: "graphUpdate", graph: this.store.current });
         this.post({ type: "compilationStatus", ...this.store.compilation });
         if (this.pendingLineage) {
+          // An explicit "Focus in Graph" outranks the file that happened to be open.
           this.post({ type: "focusLineage", nodeId: this.pendingLineage });
           this.pendingLineage = undefined;
+          this.openedFrom = undefined;
         }
+        if (this.store.current) this.pointAtOpenedFrom();
         void this.build();
         return;
       case "requestRefresh":
@@ -262,6 +274,18 @@ class GraphController implements vscode.Disposable {
     void this.context.workspaceState.update(TAG_FILTER_KEY, this.selectedTags);
   }
 
+  /**
+   * Point the canvas at the file the panel was opened from — once per panel, never on a recompile.
+   * Only a large project's start screen acts on it (by focusing that node); a small one ignores it.
+   * Kept pending until a graph exists, since the first compile may land after `ready`.
+   */
+  private pointAtOpenedFrom(): void {
+    if (!this.openedFrom) return;
+    const nodeId = this.store.nodeIdForFile(this.openedFrom);
+    this.openedFrom = undefined;
+    if (nodeId) this.post({ type: "startFrom", nodeId });
+  }
+
   private focusActive(editor: vscode.TextEditor | undefined): void {
     if (!editor) return;
     const nodeId = this.store.nodeIdForFile(editor.document.uri.fsPath);
@@ -309,6 +333,7 @@ class GraphController implements vscode.Disposable {
     this.panel = undefined;
     this.ready = false;
     this.pendingLineage = undefined;
+    this.openedFrom = undefined;
     for (const d of this.panelDisposables.splice(0)) d.dispose();
   }
 

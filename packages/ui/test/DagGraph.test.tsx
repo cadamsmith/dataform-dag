@@ -2,7 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { SerializedGraph } from "@dataform-dag/core";
 import { layoutGraph } from "../src/graphToFlow.js";
-import { DagGraph, anchorBetween } from "../src/DagGraph.js";
+import {
+  DagGraph,
+  anchorBetween,
+  emphasisFor,
+  emphasizeEdges,
+  emphasizeNodes,
+  type ModelNodeData,
+} from "../src/DagGraph.js";
+import type { Edge, Node } from "@xyflow/react";
 
 // React Flow measures its pane via getBoundingClientRect; jsdom returns zeros, so give it a size.
 const originalRect = Element.prototype.getBoundingClientRect;
@@ -88,5 +96,46 @@ describe("anchorBetween", () => {
 
   it("returns null when nothing survives", () => {
     expect(anchorBetween([at("a", 0, 0)], [at("b", 0, 0)], "a", { x: 0, y: 0 })).toBeNull();
+  });
+});
+
+describe("emphasis", () => {
+  // a ─▶ b ─▶ c, and x ─▶ y off to the side.
+  const flowEdges: Edge[] = [
+    { id: "a-b", source: "a", target: "b" },
+    { id: "b-c", source: "b", target: "c" },
+    { id: "x-y", source: "x", target: "y" },
+  ];
+  const flowNodes: Node<ModelNodeData>[] = ["a", "b", "c", "x", "y"].map((id) => ({
+    id,
+    position: { x: 0, y: 0 },
+    data: { label: id, color: "", nodeType: "table", selected: false, dimmed: false, root: false, context: false },
+  }));
+  const none = new Set<string>();
+  const em = (selected: string | null, hovered: string | null) =>
+    emphasisFor(flowEdges, selected, hovered, none, none);
+  const dimmed = (nodes: Node<ModelNodeData>[]) => nodes.filter((n) => n.data.dimmed).map((n) => n.id);
+
+  it("hover dims nothing; it only lights the hovered node's edges", () => {
+    const nodes = emphasizeNodes(flowNodes, em(null, "b"));
+    expect(dimmed(nodes)).toEqual([]);
+    const edges = emphasizeEdges(flowEdges, em(null, "b"));
+    expect(edges.map((e) => e.className)).toEqual(["is-active", "is-active", undefined]);
+  });
+
+  it("selection dims everything but its neighbors, and hover lifts the hovered node's", () => {
+    expect(dimmed(emphasizeNodes(flowNodes, em("a", null)))).toEqual(["c", "x", "y"]);
+    expect(dimmed(emphasizeNodes(flowNodes, em("a", "x")))).toEqual(["c"]);
+  });
+
+  it("keeps the same object for every node and edge a hover doesn't change", () => {
+    const nodes = emphasizeNodes(flowNodes, em(null, "b"));
+    expect(nodes.every((n, i) => n === flowNodes[i])).toBe(true);
+    const edges = emphasizeEdges(flowEdges, em(null, "b"));
+    expect(edges[2]).toBe(flowEdges[2]);
+    // Moving the pointer off again only touches the edges it had lit.
+    const after = emphasizeEdges(edges, em(null, null));
+    expect(after[0]).not.toBe(edges[0]);
+    expect(after[2]).toBe(edges[2]);
   });
 });

@@ -62,3 +62,23 @@ function walk(
   }
   return { reached, hops };
 }
+
+/**
+ * The deepest hop limit whose lineage stays within `limit` nodes (never less than 1), or null when
+ * the whole lineage already fits. A shared core table's full lineage is most of a big project, so
+ * focusing on it unbounded would just redraw everything.
+ */
+export function depthWithin(
+  graph: SerializedGraph,
+  rootIds: string[],
+  limit: number,
+): number | null {
+  const all = lineageOf(graph, rootIds, null);
+  if (all.keep.size <= limit) return null;
+  let depth = 1;
+  for (let d = 2; d < all.hops; d++) {
+    if (lineageOf(graph, rootIds, d).keep.size > limit) break;
+    depth = d;
+  }
+  return depth;
+}

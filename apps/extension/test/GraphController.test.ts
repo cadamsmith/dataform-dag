@@ -634,6 +634,24 @@ describe("tree view commands", () => {
     expect(postedOfType("focusNode").at(-1)).toEqual({ type: "focusNode", nodeId: "a" });
   });
 
+  it("starts from the file that was open when the panel opened, once, even if it compiles after ready", async () => {
+    const context = fakeContext();
+    activate(context as never);
+    window.activeTextEditor = { document: { uri: Uri.file("/proj/a.sqlx") } };
+    records.commands.get("dataformDag.showGraph")!();
+    // The panel now covers that editor; it must have been read before.
+    window.activeTextEditor = undefined;
+    lastPanel().webview.emitMessage({ type: "ready" });
+    await vi.waitFor(() =>
+      expect(postedOfType("startFrom")).toEqual([{ type: "startFrom", nodeId: "a" }]),
+    );
+    // A recompile doesn't move the user back to where they started.
+    await records.commands.get("dataformDag.refresh")!();
+    await flush();
+    expect(postedOfType("startFrom")).toHaveLength(1);
+    expect(postedOfType("focusNode")).toEqual([]);
+  });
+
   it("Focus in Graph opens the panel and enters focus mode only once the webview is ready", async () => {
     activate(fakeContext() as never);
 
