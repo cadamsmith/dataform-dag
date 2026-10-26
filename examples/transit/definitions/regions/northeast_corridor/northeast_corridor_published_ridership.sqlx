@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  schema: "regional_published",
+  tags: ["regional", "northeast_corridor"],
+  description: "Northeast Corridor: every member agency's published ridership, side by side."
+}
+
+SELECT * FROM ${ref("mbta_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("mta_nyct_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("lirr_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("metro_north_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("njt_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("path_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("septa_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("wmata_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("mta_maryland_ridership_published")}

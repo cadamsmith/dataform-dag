@@ -1,0 +1,12 @@
+config {
+  type: "table",
+  schema: "partner_exports",
+  tags: ["partner_exports", "mbta"],
+  description: "Clearinghouse fare taps matched to boardings."
+}
+
+SELECT *
+FROM ${ref("fare_clearinghouse_transactions")}
+CROSS JOIN ${ref("fare_media_registry")}
+CROSS JOIN ${ref("dim_fare_media")}
+CROSS JOIN ${ref("mbta_trip_events")}

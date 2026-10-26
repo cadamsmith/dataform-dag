@@ -1,0 +1,18 @@
+config {
+  type: "table",
+  schema: "agency_models",
+  tags: ["rtc_southern_nevada", "ridership", "daily"],
+  description: "RTC Southern Nevada: boardings and alightings per service day, route and stop."
+}
+
+SELECT
+  service_date,
+  route_id,
+  stop_id,
+  SUM(boardings) AS boardings,
+  SUM(alightings) AS alightings,
+  COUNT(DISTINCT trip_id) AS trips_operated,
+  MAX(vehicle_capacity) AS vehicle_capacity
+FROM ${ref("rtc_southern_nevada_trip_events")}
+JOIN ${ref("stop_events")} USING (event_id)
+GROUP BY 1, 2, 3

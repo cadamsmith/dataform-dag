@@ -1,0 +1,18 @@
+config {
+  type: "table",
+  schema: "agency_models",
+  tags: ["marta", "ridership", "daily"],
+  description: "Metropolitan Atlanta Rapid Transit Authority: boardings and alightings per service day, route and stop."
+}
+
+SELECT
+  service_date,
+  route_id,
+  stop_id,
+  SUM(boardings) AS boardings,
+  SUM(alightings) AS alightings,
+  COUNT(DISTINCT trip_id) AS trips_operated,
+  MAX(vehicle_capacity) AS vehicle_capacity
+FROM ${ref("marta_trip_events")}
+JOIN ${ref("stop_events")} USING (event_id)
+GROUP BY 1, 2, 3

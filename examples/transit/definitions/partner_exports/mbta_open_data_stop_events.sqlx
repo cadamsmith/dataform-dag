@@ -1,0 +1,9 @@
+config {
+  type: "view",
+  schema: "partner_exports",
+  tags: ["partner_exports", "mbta"],
+  description: "Stop-level events for the state open-data portal."
+}
+
+SELECT *
+FROM ${ref("mbta_trip_events")}

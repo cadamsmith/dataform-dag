@@ -1,0 +1,22 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core", "mbta", "mta_nyct", "lirr", "metro_north", "njt", "path", "septa", "wmata", "mta_maryland", "bart", "sfmta", "ac_transit", "vta", "caltrain"],
+  description: "Conformed trips across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id),
+  j2.* EXCEPT (agency_id),
+  j3.* EXCEPT (agency_id)
+FROM ${ref("stg_gtfs_trips")} AS a
+LEFT JOIN ${ref("stg_gtfs_stop_times")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_frequencies")} AS j1
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_calendar")} AS j2
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_calendar_dates")} AS j3
+  USING (agency_id)

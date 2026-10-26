@@ -1,0 +1,22 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core"],
+  description: "Conformed service patterns across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id),
+  j2.* EXCEPT (agency_id),
+  j3.* EXCEPT (agency_id)
+FROM ${ref("stg_gtfs_trips")} AS a
+LEFT JOIN ${ref("stg_gtfs_stop_times")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("dim_stops")} AS j1
+  USING (agency_id)
+LEFT JOIN ${ref("dim_routes")} AS j2
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_frequencies")} AS j3
+  USING (agency_id)

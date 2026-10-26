@@ -1,0 +1,14 @@
+config {
+  type: "operations",
+  schema: "raw_realtime",
+  tags: ["maintenance"],
+  dependencies: [
+    "vehicle_positions",
+    "stop_events",
+    "agency_registry",
+    "fct_scheduled_service"
+  ]
+}
+
+-- Keeps raw realtime storage bounded; runs after the day's loads.
+ALTER TABLE ${ref("vehicle_positions")} SET OPTIONS (partition_expiration_days = 400)

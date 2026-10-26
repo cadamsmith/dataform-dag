@@ -1,0 +1,80 @@
+config {
+  type: "table",
+  schema: "published",
+  tags: ["national", "mbta", "mta_nyct", "lirr", "metro_north", "njt", "septa", "wmata", "mta_maryland", "bart", "sfmta", "ac_transit", "vta", "caltrain", "samtrans", "trimet", "king_county_metro", "sound_transit", "community_transit", "cta", "metra", "pace", "marta", "dart", "houston_metro", "capmetro", "rtd_denver", "uta", "valley_metro", "la_metro", "octa", "mts_san_diego", "rtc_southern_nevada", "metro_transit_mn", "hart", "jta", "miami_dade", "ttc"],
+  description: "Every NTD-reporting agency's published ridership, for the national dashboard."
+}
+
+SELECT 'mbta' AS agency_id, * FROM ${ref("mbta_ridership_published")}
+UNION ALL
+SELECT 'mta_nyct' AS agency_id, * FROM ${ref("mta_nyct_ridership_published")}
+UNION ALL
+SELECT 'lirr' AS agency_id, * FROM ${ref("lirr_ridership_published")}
+UNION ALL
+SELECT 'metro_north' AS agency_id, * FROM ${ref("metro_north_ridership_published")}
+UNION ALL
+SELECT 'njt' AS agency_id, * FROM ${ref("njt_ridership_published")}
+UNION ALL
+SELECT 'septa' AS agency_id, * FROM ${ref("septa_ridership_published")}
+UNION ALL
+SELECT 'wmata' AS agency_id, * FROM ${ref("wmata_ridership_published")}
+UNION ALL
+SELECT 'mta_maryland' AS agency_id, * FROM ${ref("mta_maryland_ridership_published")}
+UNION ALL
+SELECT 'bart' AS agency_id, * FROM ${ref("bart_ridership_published")}
+UNION ALL
+SELECT 'sfmta' AS agency_id, * FROM ${ref("sfmta_ridership_published")}
+UNION ALL
+SELECT 'ac_transit' AS agency_id, * FROM ${ref("ac_transit_ridership_published")}
+UNION ALL
+SELECT 'vta' AS agency_id, * FROM ${ref("vta_ridership_published")}
+UNION ALL
+SELECT 'caltrain' AS agency_id, * FROM ${ref("caltrain_ridership_published")}
+UNION ALL
+SELECT 'samtrans' AS agency_id, * FROM ${ref("samtrans_ridership_published")}
+UNION ALL
+SELECT 'trimet' AS agency_id, * FROM ${ref("trimet_ridership_published")}
+UNION ALL
+SELECT 'king_county_metro' AS agency_id, * FROM ${ref("king_county_metro_ridership_published")}
+UNION ALL
+SELECT 'sound_transit' AS agency_id, * FROM ${ref("sound_transit_ridership_published")}
+UNION ALL
+SELECT 'community_transit' AS agency_id, * FROM ${ref("community_transit_ridership_published")}
+UNION ALL
+SELECT 'cta' AS agency_id, * FROM ${ref("cta_ridership_published")}
+UNION ALL
+SELECT 'metra' AS agency_id, * FROM ${ref("metra_ridership_published")}
+UNION ALL
+SELECT 'pace' AS agency_id, * FROM ${ref("pace_ridership_published")}
+UNION ALL
+SELECT 'marta' AS agency_id, * FROM ${ref("marta_ridership_published")}
+UNION ALL
+SELECT 'dart' AS agency_id, * FROM ${ref("dart_ridership_published")}
+UNION ALL
+SELECT 'houston_metro' AS agency_id, * FROM ${ref("houston_metro_ridership_published")}
+UNION ALL
+SELECT 'capmetro' AS agency_id, * FROM ${ref("capmetro_ridership_published")}
+UNION ALL
+SELECT 'rtd_denver' AS agency_id, * FROM ${ref("rtd_denver_ridership_published")}
+UNION ALL
+SELECT 'uta' AS agency_id, * FROM ${ref("uta_ridership_published")}
+UNION ALL
+SELECT 'valley_metro' AS agency_id, * FROM ${ref("valley_metro_ridership_published")}
+UNION ALL
+SELECT 'la_metro' AS agency_id, * FROM ${ref("la_metro_ridership_published")}
+UNION ALL
+SELECT 'octa' AS agency_id, * FROM ${ref("octa_ridership_published")}
+UNION ALL
+SELECT 'mts_san_diego' AS agency_id, * FROM ${ref("mts_san_diego_ridership_published")}
+UNION ALL
+SELECT 'rtc_southern_nevada' AS agency_id, * FROM ${ref("rtc_southern_nevada_ridership_published")}
+UNION ALL
+SELECT 'metro_transit_mn' AS agency_id, * FROM ${ref("metro_transit_mn_ridership_published")}
+UNION ALL
+SELECT 'hart' AS agency_id, * FROM ${ref("hart_ridership_published")}
+UNION ALL
+SELECT 'jta' AS agency_id, * FROM ${ref("jta_ridership_published")}
+UNION ALL
+SELECT 'miami_dade' AS agency_id, * FROM ${ref("miami_dade_ridership_published")}
+UNION ALL
+SELECT 'ttc' AS agency_id, * FROM ${ref("ttc_ridership_published")}

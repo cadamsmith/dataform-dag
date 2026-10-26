@@ -1,0 +1,22 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core", "rail"],
+  description: "Conformed stations across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id),
+  j2.* EXCEPT (agency_id),
+  j3.* EXCEPT (agency_id)
+FROM ${ref("dim_stops")} AS a
+LEFT JOIN ${ref("dim_routes")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_pathways")} AS j1
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_levels")} AS j2
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_stops")} AS j3
+  USING (agency_id)

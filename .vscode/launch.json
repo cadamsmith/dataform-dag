@@ -12,6 +12,17 @@
         "${workspaceFolder}/examples/starlog"
       ],
       "outFiles": ["${workspaceFolder}/apps/extension/dist/**/*.js"]
+    },
+    {
+      // The large example (~1,500 actions): for performance work, not for clicking through.
+      "name": "Run Extension (transit, large)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
+        "${workspaceFolder}/examples/transit"
+      ],
+      "outFiles": ["${workspaceFolder}/apps/extension/dist/**/*.js"]
     }
   ]
 }

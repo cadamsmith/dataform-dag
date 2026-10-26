@@ -1,0 +1,25 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core", "mbta", "mta_nyct", "lirr", "metro_north", "njt", "path", "septa", "wmata", "mta_maryland", "bart", "sfmta", "ac_transit", "vta", "caltrain", "samtrans", "golden_gate", "trimet", "king_county_metro", "sound_transit", "community_transit", "cta", "metra", "pace", "marta", "dart", "houston_metro", "capmetro", "rtd_denver", "uta", "valley_metro", "la_metro", "octa", "mts_san_diego", "rtc_southern_nevada", "metro_transit_mn", "hart", "jta"],
+  description: "Conformed routes across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id),
+  j2.* EXCEPT (agency_id),
+  j3.* EXCEPT (agency_id),
+  j4.* EXCEPT (agency_id)
+FROM ${ref("stg_gtfs_routes")} AS a
+LEFT JOIN ${ref("stg_gtfs_route_networks")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_networks")} AS j1
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_trips")} AS j2
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_shapes")} AS j3
+  USING (agency_id)
+LEFT JOIN ${ref("dim_stops")} AS j4
+  USING (agency_id)

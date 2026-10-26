@@ -1,0 +1,17 @@
+config {
+  type: "table",
+  schema: "regional",
+  tags: ["regional", "cascadia"],
+  description: "Cascadia: ridership per day across member agencies, from trip events, reconciled to published."
+}
+
+SELECT * FROM (
+SELECT * FROM ${ref("trimet_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("king_county_metro_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("sound_transit_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("community_transit_trip_events")}
+)
+JOIN ${ref("cascadia_published_ridership")} USING (service_date, route_id, stop_id)

@@ -1,0 +1,8 @@
+config {
+  type: "view",
+  schema: "network",
+  tags: ["network", "public"],
+  description: "Network ridership for dashboards."
+}
+
+SELECT * FROM ${ref("network_ridership_daily")}

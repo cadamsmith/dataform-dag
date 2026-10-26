@@ -1,0 +1,10 @@
+config {
+  type: "table",
+  schema: "agency_models",
+  tags: ["national", "transfers"],
+  description: "Rider transfers between partner systems."
+}
+
+SELECT 'caltrain' AS agency_id, * FROM ${ref("caltrain_transfers_daily")}
+UNION ALL
+SELECT 'path' AS agency_id, * FROM ${ref("path_transfers_daily")}

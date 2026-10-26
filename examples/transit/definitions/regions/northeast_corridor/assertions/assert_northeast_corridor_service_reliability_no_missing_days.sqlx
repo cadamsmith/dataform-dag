@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "northeast_corridor", "data_quality"]
+}
+
+SELECT 1 FROM ${ref("northeast_corridor_service_reliability")} HAVING COUNT(DISTINCT service_date) < 28

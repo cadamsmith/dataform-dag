@@ -1,0 +1,10 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core", "mbta", "mta_nyct", "lirr", "metro_north", "njt", "path", "septa", "wmata", "mta_maryland", "bart", "sfmta", "ac_transit", "vta", "caltrain", "samtrans", "golden_gate", "trimet", "king_county_metro", "sound_transit", "community_transit", "cta", "metra", "pace", "marta", "dart", "houston_metro", "capmetro", "rtd_denver", "uta", "valley_metro", "la_metro", "octa", "mts_san_diego", "rtc_southern_nevada", "metro_transit_mn", "hart", "jta"],
+  description: "Conformed holidays across every agency feed."
+}
+
+SELECT
+  a.*
+FROM ${ref("stg_gtfs_feed_info")} AS a

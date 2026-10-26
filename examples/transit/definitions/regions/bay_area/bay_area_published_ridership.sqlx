@@ -1,0 +1,20 @@
+config {
+  type: "table",
+  schema: "regional_published",
+  tags: ["regional", "bay_area"],
+  description: "Bay Area: every member agency's published ridership, side by side."
+}
+
+SELECT * FROM ${ref("bart_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("sfmta_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("ac_transit_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("vta_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("caltrain_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("samtrans_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("golden_gate_ridership_published")}

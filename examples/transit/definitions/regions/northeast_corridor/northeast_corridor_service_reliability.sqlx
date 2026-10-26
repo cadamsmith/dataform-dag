@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  schema: "regional",
+  tags: ["regional", "northeast_corridor"],
+  description: "Northeast Corridor: on-time performance per agency and day."
+}
+
+SELECT * FROM ${ref("mbta_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("mta_nyct_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("lirr_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("metro_north_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("njt_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("path_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("septa_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("wmata_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("mta_maryland_trip_events")}

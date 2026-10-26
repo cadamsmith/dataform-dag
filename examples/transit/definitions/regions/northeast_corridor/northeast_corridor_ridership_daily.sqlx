@@ -1,0 +1,27 @@
+config {
+  type: "table",
+  schema: "regional",
+  tags: ["regional", "northeast_corridor"],
+  description: "Northeast Corridor: ridership per day across member agencies, from trip events, reconciled to published."
+}
+
+SELECT * FROM (
+SELECT * FROM ${ref("mbta_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("mta_nyct_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("lirr_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("metro_north_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("njt_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("path_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("septa_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("wmata_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("mta_maryland_trip_events")}
+)
+JOIN ${ref("northeast_corridor_published_ridership")} USING (service_date, route_id, stop_id)

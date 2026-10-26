@@ -1,0 +1,18 @@
+config {
+  type: "view",
+  schema: "published",
+  tags: ["rtc_southern_nevada", "published", "open_data", "public"],
+  description: "RTC Southern Nevada ridership for the open-data portal, with the agency's licence attached."
+}
+
+SELECT
+  p.service_date,
+  p.route_id,
+  p.stop_id,
+  p.boardings,
+  p.alightings,
+  dir.display_name AS agency,
+  dir.licence
+FROM ${ref("rtc_southern_nevada_ridership_published")} AS p
+CROSS JOIN ${ref("agency_directory")} AS dir
+WHERE dir.agency_id = 'rtc_southern_nevada'

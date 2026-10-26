@@ -1,0 +1,10 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core"],
+  description: "Conformed fare media across every agency feed."
+}
+
+SELECT
+  a.*
+FROM ${ref("stg_gtfs_fare_media")} AS a

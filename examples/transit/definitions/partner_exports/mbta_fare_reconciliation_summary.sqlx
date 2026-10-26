@@ -1,0 +1,9 @@
+config {
+  type: "table",
+  schema: "partner_exports",
+  tags: ["partner_exports", "mbta"],
+  description: "Daily fare reconciliation variance."
+}
+
+SELECT *
+FROM ${ref("mbta_fare_reconciliation")}

@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "cascadia", "data_quality"]
+}
+
+SELECT * FROM ${ref("cascadia_service_reliability")} WHERE on_time_pct NOT BETWEEN 0 AND 100

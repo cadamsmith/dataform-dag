@@ -1,0 +1,7 @@
+config {
+  type: "operations",
+  schema: "transit_assertions",
+  tags: ["ops"]
+}
+
+GRANT `roles/bigquery.dataViewer` ON SCHEMA regional TO "group:bay-area-planners@transit-demo.org"

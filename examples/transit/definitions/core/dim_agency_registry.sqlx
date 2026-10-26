@@ -1,0 +1,13 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core"],
+  description: "Conformed agency registry across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id)
+FROM ${ref("agency_registry")} AS a
+LEFT JOIN ${ref("agency")} AS j0
+  USING (agency_id)

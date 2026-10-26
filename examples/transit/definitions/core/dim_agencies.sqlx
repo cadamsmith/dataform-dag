@@ -1,0 +1,13 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core"],
+  description: "Conformed agencies across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id)
+FROM ${ref("dim_agency_registry")} AS a
+LEFT JOIN ${ref("stg_gtfs_agency")} AS j0
+  USING (agency_id)

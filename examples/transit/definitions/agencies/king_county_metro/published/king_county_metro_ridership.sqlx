@@ -1,0 +1,18 @@
+config {
+  type: "view",
+  schema: "published",
+  tags: ["king_county_metro", "published", "open_data", "public"],
+  description: "King County Metro ridership for the open-data portal, with the agency's licence attached."
+}
+
+SELECT
+  p.service_date,
+  p.route_id,
+  p.stop_id,
+  p.boardings,
+  p.alightings,
+  dir.display_name AS agency,
+  dir.licence
+FROM ${ref("king_county_metro_ridership_published")} AS p
+CROSS JOIN ${ref("agency_directory")} AS dir
+WHERE dir.agency_id = 'king_county_metro'

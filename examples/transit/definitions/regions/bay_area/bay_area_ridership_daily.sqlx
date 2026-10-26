@@ -1,0 +1,23 @@
+config {
+  type: "table",
+  schema: "regional",
+  tags: ["regional", "bay_area"],
+  description: "Bay Area: ridership per day across member agencies, from trip events, reconciled to published."
+}
+
+SELECT * FROM (
+SELECT * FROM ${ref("bart_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("sfmta_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("ac_transit_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("vta_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("caltrain_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("samtrans_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("golden_gate_trip_events")}
+)
+JOIN ${ref("bay_area_published_ridership")} USING (service_date, route_id, stop_id)

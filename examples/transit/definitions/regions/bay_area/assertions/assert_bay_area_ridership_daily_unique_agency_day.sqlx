@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "bay_area", "data_quality"]
+}
+
+SELECT agency_id, service_date FROM ${ref("bay_area_ridership_daily")} GROUP BY 1, 2 HAVING COUNT(*) > 1

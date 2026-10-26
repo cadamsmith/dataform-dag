@@ -1,0 +1,20 @@
+config {
+  type: "table",
+  schema: "regional",
+  tags: ["regional", "bay_area"],
+  description: "Bay Area: on-time performance per agency and day."
+}
+
+SELECT * FROM ${ref("bart_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("sfmta_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("ac_transit_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("vta_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("caltrain_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("samtrans_trip_events")}
+UNION ALL
+SELECT * FROM ${ref("golden_gate_trip_events")}

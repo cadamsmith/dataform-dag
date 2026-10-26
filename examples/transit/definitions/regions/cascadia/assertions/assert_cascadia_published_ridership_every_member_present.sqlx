@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "cascadia", "data_quality"]
+}
+
+SELECT agency_id FROM UNNEST(["trimet","king_county_metro","sound_transit","community_transit"]) agency_id LEFT JOIN ${ref("cascadia_published_ridership")} USING (agency_id) WHERE service_date IS NULL

@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "bay_area", "data_quality"]
+}
+
+SELECT agency_id FROM UNNEST(["bart","sfmta","ac_transit","vta","caltrain","samtrans","golden_gate"]) agency_id LEFT JOIN ${ref("bay_area_published_ridership")} USING (agency_id) WHERE service_date IS NULL

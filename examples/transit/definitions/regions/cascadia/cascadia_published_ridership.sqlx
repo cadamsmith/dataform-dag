@@ -1,0 +1,14 @@
+config {
+  type: "table",
+  schema: "regional_published",
+  tags: ["regional", "cascadia"],
+  description: "Cascadia: every member agency's published ridership, side by side."
+}
+
+SELECT * FROM ${ref("trimet_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("king_county_metro_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("sound_transit_ridership_published")}
+UNION ALL
+SELECT * FROM ${ref("community_transit_ridership_published")}

@@ -1,0 +1,19 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core", "bus"],
+  description: "Conformed route patterns across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id),
+  j2.* EXCEPT (agency_id)
+FROM ${ref("dim_agencies")} AS a
+LEFT JOIN ${ref("dim_routes")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("dim_fare_media")} AS j1
+  USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_shapes")} AS j2
+  USING (agency_id)

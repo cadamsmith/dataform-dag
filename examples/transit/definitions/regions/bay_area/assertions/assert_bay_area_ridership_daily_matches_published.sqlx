@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "bay_area", "data_quality"]
+}
+
+SELECT 1 FROM ${ref("bay_area_ridership_daily")} WHERE boardings IS DISTINCT FROM published_boardings

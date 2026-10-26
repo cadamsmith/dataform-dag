@@ -1,0 +1,16 @@
+config {
+  type: "view",
+  schema: "staging",
+  tags: ["staging"],
+  description: "Typed, deduplicated calendar_dates.txt rows, one per agency feed."
+}
+
+SELECT
+  *
+  EXCEPT (_ingested_at),
+  _ingested_at AS loaded_at
+FROM ${ref("calendar_dates")} AS src
+JOIN ${ref("feed_versions")} AS fv
+  USING (agency_id, feed_version)
+WHERE fv.is_current
+QUALIFY ROW_NUMBER() OVER (PARTITION BY agency_id, feed_version ORDER BY _ingested_at DESC) = 1

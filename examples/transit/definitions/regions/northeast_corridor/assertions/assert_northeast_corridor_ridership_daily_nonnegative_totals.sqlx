@@ -1,0 +1,7 @@
+config {
+  type: "assertion",
+  schema: "regional_assertions",
+  tags: ["regional", "northeast_corridor", "data_quality"]
+}
+
+SELECT * FROM ${ref("northeast_corridor_ridership_daily")} WHERE boardings < 0

@@ -1,0 +1,16 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core"],
+  description: "Conformed route stops across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id)
+FROM ${ref("dim_routes")} AS a
+LEFT JOIN ${ref("dim_agency_registry")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("fct_scheduled_service")} AS j1
+  USING (agency_id)

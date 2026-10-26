@@ -1,0 +1,16 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core", "fares"],
+  description: "Conformed fare products across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id),
+  j1.* EXCEPT (agency_id)
+FROM ${ref("stg_gtfs_fare_products")} AS a
+LEFT JOIN ${ref("stg_gtfs_fare_leg_rules")} AS j0
+  USING (agency_id)
+LEFT JOIN ${ref("dim_fare_media")} AS j1
+  USING (agency_id)

@@ -1,0 +1,26 @@
+config {
+  type: "incremental",
+  schema: "network",
+  tags: ["network"],
+  uniqueKey: ["region", "service_date"],
+  description: "Ridership and reliability for every region with a rollup, one row per region and day."
+}
+
+SELECT 'bay_area' AS region, * FROM ${ref("bay_area_published_ridership")}
+UNION ALL
+SELECT 'bay_area' AS region, * FROM ${ref("bay_area_ridership_daily")}
+UNION ALL
+SELECT 'bay_area' AS region, * FROM ${ref("bay_area_service_reliability")}
+UNION ALL
+SELECT 'cascadia' AS region, * FROM ${ref("cascadia_published_ridership")}
+UNION ALL
+SELECT 'cascadia' AS region, * FROM ${ref("cascadia_ridership_daily")}
+UNION ALL
+SELECT 'cascadia' AS region, * FROM ${ref("cascadia_service_reliability")}
+UNION ALL
+SELECT 'northeast_corridor' AS region, * FROM ${ref("northeast_corridor_published_ridership")}
+UNION ALL
+SELECT 'northeast_corridor' AS region, * FROM ${ref("northeast_corridor_ridership_daily")}
+UNION ALL
+SELECT 'northeast_corridor' AS region, * FROM ${ref("northeast_corridor_service_reliability")}
+JOIN ${ref("dim_routes")} USING (route_id)

@@ -1,0 +1,9 @@
+config {
+  type: "view",
+  schema: "partner_exports",
+  tags: ["partner_exports", "mbta"],
+  description: "GTFS-Realtime TripUpdates feed rebuilt from matched trip events."
+}
+
+SELECT *
+FROM ${ref("mbta_trip_events")}

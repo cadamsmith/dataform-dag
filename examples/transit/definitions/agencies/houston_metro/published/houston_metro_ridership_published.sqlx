@@ -1,0 +1,28 @@
+config {
+  type: "incremental",
+  schema: "published",
+  tags: ["houston_metro", "published"],
+  uniqueKey: ["service_date", "route_id", "stop_id"],
+  description: "METRO Houston: validated daily ridership. Builds only after every gating check passes.",
+  dependencies: [
+    "assert_houston_metro_trip_events_unique_event_id",
+    "assert_houston_metro_trip_events_no_null_keys",
+    "assert_houston_metro_ridership_daily_unique_day_route_stop",
+    "assert_houston_metro_ridership_daily_nonnegative_counts",
+    "assert_houston_metro_ridership_daily_complete_service_days",
+    "assert_houston_metro_trip_events_stop_ids_exist",
+    "assert_houston_metro_trip_events_routes_scheduled",
+    "assert_houston_metro_trip_events_service_dates_scheduled"
+  ]
+}
+
+SELECT
+  d.*,
+  SAFE_DIVIDE(d.boardings, d.vehicle_capacity * d.trips_operated) AS load_factor,
+  r.route_status,
+  latest.feed_version
+FROM ${ref("houston_metro_ridership_daily")} AS d
+JOIN ${ref("houston_metro_trip_events")} USING (service_date, route_id, stop_id)
+JOIN ${ref("fct_scheduled_service")} AS r USING (route_id)
+CROSS JOIN (SELECT MAX(feed_version) AS feed_version FROM ${ref("stop_events")} WHERE agency_id = 'houston_metro') AS latest
+${when(incremental(), `WHERE d.service_date > (SELECT MAX(service_date) FROM ${self()})`)}

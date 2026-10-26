@@ -1,0 +1,32 @@
+config {
+  type: "incremental",
+  schema: "agency_models",
+  tags: ["metra", "trip_events"],
+  uniqueKey: ["event_id"],
+  description: "Metra: one row per vehicle arrival/departure at a stop, matched to the schedule."
+}
+
+SELECT
+  ev.event_id,
+  ev.agency_id,
+  ev.service_date,
+  ev.trip_id,
+  t.route_id,
+  ev.stop_id,
+  ev.stop_sequence,
+  ev.event_ts,
+  ev.boardings,
+  ev.alightings,
+  ev.vehicle_capacity
+FROM ${ref("stop_events")} AS ev
+JOIN ${ref("stg_gtfs_trips")} AS t USING (agency_id, trip_id)
+JOIN ${ref("fct_scheduled_service")} AS s USING (agency_id, service_date, trip_id, stop_sequence)
+JOIN ${ref("dim_stops")} AS st USING (agency_id, stop_id)
+LEFT JOIN ${ref("dim_holidays")} AS h USING (service_date)
+LEFT JOIN ${ref("dim_stations")} USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_stop_times")} USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_transfers")} USING (agency_id)
+LEFT JOIN ${ref("stg_gtfs_pathways")} USING (agency_id)
+WHERE ev.agency_id = 'metra'
+  AND NOT COALESCE(h.no_service, FALSE)
+${when(incremental(), `AND ev.service_date > (SELECT MAX(service_date) FROM ${self()})`)}

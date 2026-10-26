@@ -1,0 +1,17 @@
+config {
+  type: "table",
+  schema: "agency_models",
+  tags: ["caltrain", "transfers", "daily"],
+  description: "Caltrain: riders transferring to or from BART per day and station."
+}
+
+SELECT
+  service_date,
+  stop_id,
+  COUNT(*) AS transfers
+FROM ${ref("caltrain_trip_events")} AS ours
+JOIN ${ref("bart_trip_events")} AS theirs
+  USING (service_date, stop_id)
+JOIN ${ref("stop_events")} USING (event_id)
+WHERE TIMESTAMP_DIFF(theirs.event_ts, ours.event_ts, MINUTE) BETWEEN 0 AND 30
+GROUP BY 1, 2

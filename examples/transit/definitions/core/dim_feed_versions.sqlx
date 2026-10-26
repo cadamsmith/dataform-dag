@@ -1,0 +1,13 @@
+config {
+  type: "table",
+  schema: "core",
+  tags: ["core"],
+  description: "Conformed feed versions across every agency feed."
+}
+
+SELECT
+  a.*,
+  j0.* EXCEPT (agency_id)
+FROM ${ref("feed_versions")} AS a
+LEFT JOIN ${ref("dim_agency_registry")} AS j0
+  USING (agency_id)

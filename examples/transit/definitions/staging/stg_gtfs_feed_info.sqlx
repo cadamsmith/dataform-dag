@@ -1,0 +1,13 @@
+config {
+  type: "view",
+  schema: "staging",
+  tags: ["staging"],
+  description: "Typed, deduplicated feed_info.txt rows, one per agency feed."
+}
+
+SELECT
+  *
+  EXCEPT (_ingested_at),
+  _ingested_at AS loaded_at
+FROM ${ref("feed_info")} AS src
+QUALIFY ROW_NUMBER() OVER (PARTITION BY agency_id, feed_version ORDER BY _ingested_at DESC) = 1
