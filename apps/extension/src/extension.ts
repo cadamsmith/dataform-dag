@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { InboundMsg, OutboundMsg } from "@dataform-dag/ui";
 import { DagTreeProvider, type TreeEntry } from "./dagTreeProvider.js";
-import { GraphStore } from "./graphStore.js";
+import { GraphStore, type CompilationState } from "./graphStore.js";
 
 const COMMAND_SHOW_GRAPH = "dataformDag.showGraph";
 const COMMAND_SHOW_COMPILED_SQL = "dataformDag.showCompiledSql";
@@ -14,20 +14,35 @@ export function activate(context: vscode.ExtensionContext): void {
   const store = new GraphStore();
   const controller = new GraphController(context, store);
   const tree = new DagTreeProvider(store);
+  const treeView = vscode.window.createTreeView(VIEW_NODES, { treeDataProvider: tree });
   context.subscriptions.push(
     vscode.commands.registerCommand(COMMAND_SHOW_GRAPH, () => controller.show()),
     vscode.commands.registerCommand(COMMAND_SHOW_COMPILED_SQL, (arg?: unknown) =>
       void controller.showCompiledSql(nodeOf(arg)),
     ),
-    vscode.commands.registerCommand(COMMAND_REFRESH, () => void store.refresh()),
+    vscode.commands.registerCommand(COMMAND_REFRESH, () => void store.recompile()),
     vscode.commands.registerCommand(COMMAND_REVEAL_NODE, (arg?: unknown) =>
       controller.revealNode(nodeOf(arg)),
     ),
-    vscode.window.createTreeView(VIEW_NODES, { treeDataProvider: tree }),
+    treeView,
+    // The tree has no pill of its own, so a failure that left the last good graph listed is
+    // stated in the view's message instead.
+    store.onDidChangeCompilationStatus((state) => {
+      treeView.message = treeMessage(state, store.current !== undefined);
+    }),
     tree,
     controller,
     store,
   );
+  // Subscribers are wired; start the first compile without waiting for a view to ask.
+  store.start();
+}
+
+function treeMessage(state: CompilationState, hasGraph: boolean): string | undefined {
+  if (!hasGraph) return undefined; // the viewsWelcome content covers the empty tree
+  if (state.status === "error") return "Compile failed — showing the last good graph.";
+  if (state.status === "cli-missing") return "Dataform CLI not found — showing the last good graph.";
+  return undefined;
 }
 
 /**
@@ -47,7 +62,7 @@ export function deactivate(): void {
 /**
  * The webview panel's half of the {@link HostBridge} contract: renders the DAG canvas, translates
  * its messages into {@link GraphStore} calls, and mirrors the store's events back over postMessage.
- * The graph itself, the `.sqlx` watcher, and the compile cache belong to the store — this class owns
+ * The graph itself, the project watcher, and the compile cache belong to the store — this class owns
  * only what dies with the panel.
  */
 class GraphController implements vscode.Disposable {
@@ -62,8 +77,9 @@ class GraphController implements vscode.Disposable {
   ) {
     this.storeSubscriptions.push(
       store.onDidChangeGraph((graph) => this.post({ type: "graphUpdate", graph })),
-      store.onDidChangeMode((mode) => this.post({ type: "graphModeState", mode })),
-      store.onDidChangeCompilationStatus((status) => this.post({ type: "compilationStatus", status })),
+      store.onDidChangeCompilationStatus((state) =>
+        this.post({ type: "compilationStatus", ...state }),
+      ),
     );
   }
 
@@ -108,7 +124,10 @@ class GraphController implements vscode.Disposable {
         // Send the restored filter ONCE, on connect. Echoing it after each `setTagFilter` would
         // fight the user's own clicks in the UI.
         this.post({ type: "tagFilterState", selectedTags: this.selectedTags });
-        this.post({ type: "graphModeState", mode: this.store.graphMode });
+        // The store may have compiled (or failed) before this panel existed: hand over what it has
+        // now, then build — a cache hit just re-publishes, a past failure gets retried.
+        if (this.store.current) this.post({ type: "graphUpdate", graph: this.store.current });
+        this.post({ type: "compilationStatus", ...this.store.compilation });
         void this.build();
         return;
       case "requestRefresh":
@@ -126,9 +145,6 @@ class GraphController implements vscode.Disposable {
       case "setTagFilter":
         this.saveTagFilter(msg.selectedTags);
         return;
-      case "setGraphMode":
-        void this.store.setMode(msg.mode);
-        return;
     }
   }
 
@@ -138,7 +154,7 @@ class GraphController implements vscode.Disposable {
    */
   private async build(): Promise<void> {
     if ((await this.store.refresh()) === "no-workspace") {
-      vscode.window.showWarningMessage("Dataform DAG: open a folder to view its .sqlx graph.");
+      vscode.window.showWarningMessage("Dataform DAG: open a folder to view its graph.");
     }
   }
 

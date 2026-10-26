@@ -136,34 +136,51 @@ describe("diagnostics", () => {
     expect(screen.queryByText(/issue/)).not.toBeInTheDocument();
   });
 
-  it("lists an unresolved reference and explains the parsed-mode caveat", async () => {
+  it("lists an unresolved reference", async () => {
     render(<App bridge={new MockBridge(withIssues)} />);
     await userEvent.click(await screen.findByText("1 issue"));
     expect(screen.getByText("gone")).toBeInTheDocument();
-    expect(screen.getByText(/Parsed mode reads files literally/)).toBeInTheDocument();
   });
 });
 
-describe("compiled mode", () => {
-  it("hides the mode toggle when the host cannot compile", async () => {
-    render(<App bridge={new MockBridge(graph, { compiledGraph: false })} />);
-    await screen.findByText("2 nodes");
-    expect(screen.queryByRole("button", { name: "compiled" })).not.toBeInTheDocument();
-  });
-
-  it("asks the host to switch mode", async () => {
-    const bridge = new MockBridge(graph, { compiledGraph: true });
-    render(<App bridge={bridge} />);
-    await userEvent.click(await screen.findByRole("button", { name: "compiled" }));
-    expect(bridge.sent).toContainEqual({ type: "setGraphMode", mode: "compiled" });
-  });
-
+describe("compilation", () => {
   it("surfaces compilation status", async () => {
-    const bridge = new MockBridge(graph, { compiledGraph: true });
+    const bridge = new MockBridge(graph);
     render(<App bridge={bridge} />);
     await screen.findByText("2 nodes");
     act(() => bridge.emit({ type: "compilationStatus", status: "compiling" }));
     expect(await screen.findByText("compiling…")).toBeInTheDocument();
+  });
+
+  it("keeps the last good graph on screen when a recompile fails", async () => {
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    act(() =>
+      bridge.emit({ type: "compilationStatus", status: "error", message: "syntax error in mid" }),
+    );
+    const pill = await screen.findByText(/compile failed — showing last good graph/);
+    expect(pill).toHaveAttribute("title", "syntax error in mid");
+    expect(screen.getByText("2 nodes")).toBeInTheDocument();
+  });
+
+  it("shows the compile error when there is no graph yet", async () => {
+    const bridge = new MockBridge(null);
+    render(<App bridge={bridge} />);
+    expect(screen.getByText("Compiling the project…")).toBeInTheDocument();
+    act(() =>
+      bridge.emit({ type: "compilationStatus", status: "error", message: "syntax error in mid" }),
+    );
+    expect(await screen.findByText("The project failed to compile.")).toBeInTheDocument();
+    expect(screen.getByText("syntax error in mid")).toBeInTheDocument();
+  });
+
+  it("explains how to install the CLI when it is missing", async () => {
+    const bridge = new MockBridge(null);
+    render(<App bridge={bridge} />);
+    act(() => bridge.emit({ type: "compilationStatus", status: "cli-missing" }));
+    expect(await screen.findByText("Dataform CLI not found.")).toBeInTheDocument();
+    expect(screen.getByText(/dataformDag\.cliPath/)).toBeInTheDocument();
   });
 
   it("requests compiled SQL and renders the returned sections in order", async () => {

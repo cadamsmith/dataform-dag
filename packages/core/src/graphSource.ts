@@ -1,41 +1,16 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import type { DataformGraph, DataformNode, NodeType } from "./types.js";
-import type { FileSource } from "./fileSource.js";
 import { buildGraph } from "./graph.js";
-import { parseSqlx } from "./parser.js";
 
 /**
- * A producer of a {@link DataformGraph}. The two implementations emit an INTERCHANGEABLE graph —
- * both key nodes by target name — so hosts and UI depend on this seam, never on how the graph was
- * derived. Add a third strategy later by adding one more `GraphSource`; nothing downstream changes.
+ * A producer of a {@link DataformGraph}. {@link CompiledGraphSource} is the only implementation;
+ * hosts and UI depend on this seam, never on how the graph was derived.
  */
 export interface GraphSource {
   build(): Promise<DataformGraph>;
-}
-
-/**
- * Default source: regex-parse every `.sqlx` a {@link FileSource} exposes. No `@dataform/core`, no
- * compile step — the only strategy that runs in the browser and on a project that doesn't compile.
- * Trade-off: it sees only what's literally in the files, so refs materialized at compile time
- * (inline `config.assertions`, JS-block refs) are absent. Use {@link CompiledGraphSource} when
- * exactness matters and the CLI is available.
- */
-export class ParsedGraphSource implements GraphSource {
-  constructor(private readonly source: FileSource) {}
-
-  async build(): Promise<DataformGraph> {
-    return buildGraphFromWorkspace(this.source);
-  }
-}
-
-/** Convenience for the regex path: list → read → parse → build. */
-export async function buildGraphFromWorkspace(source: FileSource): Promise<DataformGraph> {
-  const paths = await source.listSqlx();
-  const nodes = await Promise.all(
-    paths.map(async (path) => parseSqlx(path, await source.read(path))),
-  );
-  return buildGraph(nodes);
 }
 
 /** The subset of `dataform compile --json` output this mapper reads. */
@@ -44,6 +19,11 @@ export interface CompileOutput {
   operations?: CompileAction[];
   assertions?: CompileAction[];
   declarations?: CompileAction[];
+  graphErrors?: { compilationErrors?: CompilationErrorEntry[] | null } | null;
+}
+export interface CompilationErrorEntry {
+  fileName?: string;
+  message?: string;
 }
 export interface CompileTarget {
   name: string;
@@ -181,6 +161,59 @@ export function findCompiledActionByFile(
 const execFileAsync = promisify(execFile);
 
 /**
+ * The Dataform CLI could not be started at all (`ENOENT`) — distinct from a project that fails to
+ * compile, so a host can offer install instructions instead of echoing a compile error.
+ */
+export class DataformCliNotFoundError extends Error {
+  constructor(readonly command: string) {
+    super(`Dataform CLI not found: ${command}`);
+    this.name = "DataformCliNotFoundError";
+  }
+}
+
+/**
+ * The project ran through the CLI but did not compile. `dataform compile --json` still prints JSON in
+ * that case (and exits 1); its `graphErrors.compilationErrors` become {@link errors}, and the message
+ * is one `file: error` line each, rather than the CLI's ANSI-coloured stderr with stack traces.
+ */
+export class DataformCompilationError extends Error {
+  constructor(readonly errors: CompilationErrorEntry[]) {
+    super(
+      errors
+        .map((e) => (e.fileName ? `${e.fileName}: ${e.message ?? "error"}` : (e.message ?? "error")))
+        .join("\n"),
+    );
+    this.name = "DataformCompilationError";
+  }
+}
+
+/** The compile errors in a `--json` payload, or none if `stdout` isn't one. */
+function compilationErrorsIn(stdout: string | undefined): CompilationErrorEntry[] {
+  if (!stdout) return [];
+  try {
+    return (JSON.parse(stdout) as CompileOutput).graphErrors?.compilationErrors ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Pick the CLI to run for `root`: an explicitly configured path wins, then the project's own
+ * `node_modules/.bin/dataform` (so the CLI version matches the project's `@dataform/core`), then
+ * `dataform` on PATH.
+ */
+export function resolveDataformCli(root: string, configured?: string): string {
+  if (configured && configured.trim() !== "") return configured.trim();
+  const local = join(
+    root,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "dataform.cmd" : "dataform",
+  );
+  return existsSync(local) ? local : "dataform";
+}
+
+/**
  * Run `dataform compile --json` in `root` and parse the payload. Node-only (spawns a process);
  * requires the CLI and a project that compiles. Separate from {@link CompiledGraphSource} because
  * the raw output carries compiled SQL that the graph mapping discards — a host that wants both a
@@ -190,20 +223,31 @@ export async function compileDataformProject(
   root: string,
   command = "dataform",
 ): Promise<CompileOutput> {
-  const { stdout } = await execFileAsync(command, ["compile", "--json"], {
-    cwd: root,
-    maxBuffer: 64 * 1024 * 1024,
-    // On Windows the installed CLI is the `dataform.cmd` npm shim, which CreateProcess cannot run
-    // directly; going through the shell is what resolves it.
-    shell: process.platform === "win32",
-  });
-  return JSON.parse(stdout) as CompileOutput;
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync(command, ["compile", "--json"], {
+      cwd: root,
+      maxBuffer: 64 * 1024 * 1024,
+      // On Windows the installed CLI is the `dataform.cmd` npm shim, which CreateProcess cannot run
+      // directly; going through the shell is what resolves it.
+      shell: process.platform === "win32",
+    }));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") throw new DataformCliNotFoundError(command);
+    const errors = compilationErrorsIn((err as { stdout?: string }).stdout);
+    if (errors.length > 0) throw new DataformCompilationError(errors);
+    throw err;
+  }
+  const output = JSON.parse(stdout) as CompileOutput;
+  // Not every CLI version exits non-zero on a compile error; a partial graph must not pass as good.
+  const errors = output.graphErrors?.compilationErrors ?? [];
+  if (errors.length > 0) throw new DataformCompilationError(errors);
+  return output;
 }
 
 /**
- * High-fidelity source: shells out to `dataform compile --json` in a project root and maps the
- * result. Node-only (spawns a process); requires the CLI and a compiling project. The exact graph
- * Dataform itself resolves — the reference the regex parser is measured against.
+ * Shells out to `dataform compile --json` in a project root and maps the result. Node-only (spawns
+ * a process); requires the CLI and a compiling project. The exact graph Dataform itself resolves.
  */
 export class CompiledGraphSource implements GraphSource {
   constructor(

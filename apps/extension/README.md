@@ -1,9 +1,9 @@
 # 🔀 dataform-dag
 
 Explore your [Dataform](https://cloud.google.com/dataform) project's dependency graph as an interactive diagram,
-right inside VS Code. The graph is parsed straight from your `.sqlx` files — **no warehouse
-connection, no cloud, and no compile step required.** When you do want compiler-exact output, one
-click switches the canvas over to `dataform compile`.
+right inside VS Code. The graph comes straight from `dataform compile`, run locally in the
+background — **no warehouse connection and no cloud**, and exactly the graph Dataform itself sees,
+including inline assertions and refs built in JavaScript.
 
 <img alt="image" src="https://github.com/user-attachments/assets/3d1dfb01-788e-4384-9f75-b36057dc909a" />
 
@@ -24,16 +24,16 @@ click switches the canvas over to `dataform compile`.
 - **Jump straight to the code.** Click through to open a node's `.sqlx` file in the editor.
 - **Follow along as you navigate.** Switch the active editor to a modeled file and its node is
   highlighted on the canvas.
-- **Live updates.** Edit and save any `.sqlx` and the graph rebuilds automatically — no refresh.
+- **Live updates.** Save a `.sqlx`, a `.js` in `definitions/` or `includes/`, or the project
+  settings and the project recompiles in the background — a burst of saves compiles once. If a save
+  breaks the build, the last good graph stays on screen and the toolbar says what failed.
 - **Catch broken refs.** Unresolved `ref()`s and duplicate node names show up as issues in the top
   bar, each one clickable straight to the node.
-- **Two levels of fidelity.** Stay on the fast built-in parser, or flip the **parsed / compiled**
-  toggle to build the graph from `dataform compile` and pick up inline assertions and refs
-  constructed in JS. If compiling fails, it says so and drops back to the parsed graph.
 
 ## Getting started
 
-1. Open a Dataform project folder in VS Code (one with a `definitions/**/*.sqlx` tree).
+1. Open a Dataform project folder in VS Code (one with a `workflow_settings.yaml` or
+   `dataform.json`). The extension starts compiling it right away.
 2. Click the **Dataform DAG** icon in the activity bar to browse your actions, or open the Command
    Palette (`Cmd`/`Ctrl` + `Shift` + `P`) and run **Dataform DAG: Show Graph** for the canvas.
 3. Click any node to open its file; edit and save to see the graph update.
@@ -50,18 +50,16 @@ The legend across the top color-codes each node by its Dataform type:
 ## Requirements
 
 - VS Code `1.90.0` or newer.
-- A Dataform project with a `definitions/` folder of `.sqlx` files.
-- Nothing else for the default view. Compiled mode and **Show Compiled SQL** shell out to the
-  [Dataform CLI](https://cloud.google.com/dataform/docs/use-dataform-cli), so those two need it
-  installed and a project that compiles.
+- A Dataform project that compiles.
+- The [Dataform CLI](https://cloud.google.com/dataform/docs/use-dataform-cli). The extension uses,
+  in order: the `dataformDag.cliPath` setting, the project's own `node_modules/.bin/dataform`, then
+  `dataform` on your `PATH`. If none is found, the sidebar and canvas tell you how to install it.
 
-## Notes
+## Settings
 
-By default the graph is built by parsing `.sqlx` text directly, which is what keeps it fast and
-dependency-free. Two things follow from that: assertions declared inline in a model's `config` block
-are folded into that model rather than shown as separate nodes, and a `ref()` inside a commented-out
-line of SQL is still counted as a dependency. For most projects the parsed graph matches the compiled
-one node-for-node — and where it matters, the **compiled** toggle gives you the compiler's answer.
+| Setting | Default | |
+| --- | --- | --- |
+| `dataformDag.cliPath` | `""` | Path to the Dataform CLI. Empty means auto-detect (see above). |
 
 ---
 

@@ -28,8 +28,7 @@ export interface DataformNode {
 
 /**
  * A problem found while building the graph. These are advisory, not fatal: the graph is still
- * usable, and in the parsed tier an "unresolved" reference is often just a ref the regex parser
- * can't follow (a JS-generated action) rather than a genuine mistake in the project.
+ * usable.
  */
 export type GraphIssue =
   | { kind: "unresolved-reference"; nodeId: string; filePath: string; reference: string }
