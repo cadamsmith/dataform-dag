@@ -9,7 +9,7 @@ credentials**, and any local Dataform project that compiles works.
 
 <img alt="The DAG canvas in VS Code"  src="https://github.com/user-attachments/assets/7ed2ba55-085a-4469-a7ff-856ef50cc34f" />
 
-## Highlights
+## highlights
 
 - **Trace lineage.** Double-click any node to see only what feeds it and what it feeds, then dial
   it in hop by hop.
@@ -27,7 +27,7 @@ credentials**, and any local Dataform project that compiles works.
 The full feature list, settings, and requirements are in the extension's README,
 [`apps/extension/README.md`](apps/extension/README.md), which is also its Marketplace page.
 
-## Get started
+## get started
 
 1. Install **Dataform DAG** from the
    [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=cadamsmith.dataform-dag)
@@ -39,9 +39,9 @@ The full feature list, settings, and requirements are in the extension's README,
 You'll need the [Dataform CLI](https://cloud.google.com/dataform/docs/use-dataform-cli), either
 installed globally or as a dependency of the project. The extension tells you if it can't find it.
 
-## Contributing
+## contributing
 
-### Develop
+### develop
 
 ```bash
 npm install          # from the repo root (npm workspaces)
@@ -59,7 +59,7 @@ builds a `.vsix`. Releases go out through `.github/workflows/publish.yml`, and
 
 `CLAUDE.md` lists the invariants that must not regress.
 
-### Layout
+### layout
 
 ```
 dataform-dag/
@@ -78,7 +78,7 @@ The UI reaches its host only through the `HostBridge` interface (`packages/ui/sr
 In the extension that's `VsCodeBridge`, which talks `postMessage` to the webview. Under
 `npm run dev:ui` it's `MockBridge`, so the canvas can be worked on in a browser without VS Code.
 
-### How the graph is built
+### how the graph is built
 
 The graph always comes from `dataform compile --json` (`compileDataformProject` in core), so it's
 exactly what Dataform resolves: inline `config.assertions`, object-form refs, and refs built in JS
