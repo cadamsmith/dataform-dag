@@ -1,16 +1,65 @@
 # 🔀 dataform-dag
 
-A VS Code extension that shows a Dataform project's dependency graph as an interactive diagram. The
-graph comes from `dataform compile --json`, run locally in the background: no warehouse
-connection and no cloud. Any local Dataform project that compiles works.
+**See your Dataform project the way Dataform sees it.** Dataform DAG draws your project's dependency
+graph as an interactive diagram right inside VS Code. You can search it, filter it, trace any
+table's lineage, and jump straight to the code. It stays up to date as you save.
+
+It runs `dataform compile` on your machine. It needs **no warehouse connection, no cloud and no
+credentials**, and any local Dataform project that compiles works.
 
 <img alt="The DAG canvas in VS Code" src="https://github.com/user-attachments/assets/3d1dfb01-788e-4384-9f75-b36057dc909a" />
 
-The feature list, requirements and settings live in the extension's own README,
-[`apps/extension/README.md`](apps/extension/README.md), which is also its Marketplace page. This
-file covers how the repo is put together.
+## Highlights
 
-## Layout
+- **Trace lineage.** Double-click any node to see only what feeds it and what it feeds, then dial
+  it in hop by hop.
+- **Find anything.** Search by name, or filter to one or more Dataform `tags`, and the canvas
+  narrows to match.
+- **Readable at scale.** Assertions fold into one node per model, and big projects open on their
+  folders. It stays fast on a 1,500-action project.
+- **The real SQL.** Click a node for its refs, tags, and the SQL Dataform actually compiles it to.
+- **Graph ⇄ code.** Cmd/Ctrl-click a `ref()` to jump to it, hover it for its type and lineage
+  counts, and the canvas follows whichever file you're editing.
+- **Always current.** Save a file and the graph recompiles in the background. A broken build keeps
+  the last good graph on screen and tells you what failed.
+- **Share it.** Copy the view on screen as a Mermaid diagram to paste into a PR, a README, or Notion.
+
+The full feature list, settings, and requirements are in the extension's README,
+[`apps/extension/README.md`](apps/extension/README.md), which is also its Marketplace page.
+
+## Get started
+
+1. Install **Dataform DAG** from the
+   [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=cadamsmith.dataform-dag)
+   or [Open VSX](https://open-vsx.org/extension/cadamsmith/dataform-dag).
+2. Open a Dataform project folder (one with `workflow_settings.yaml` or `dataform.json`).
+3. Run **Dataform DAG: Show Graph** from the Command Palette, or click the Dataform DAG icon in the
+   activity bar.
+
+You'll need the [Dataform CLI](https://cloud.google.com/dataform/docs/use-dataform-cli), either
+installed globally or as a dependency of the project. The extension tells you if it can't find it.
+
+## Contributing
+
+### Develop
+
+```bash
+npm install          # from the repo root (npm workspaces)
+npm run build:core   # ui + the extension depend on core's build output — run this first
+npm run typecheck
+npm test             # all workspaces (core + ui + extension)
+npm run dev:ui       # the shared UI alone, against a mock 18-node graph
+```
+
+To run the extension, open the repo root in VS Code and start `npm run watch -w dataform-dag`.
+Then press F5 to launch the **Run Extension** configuration. The Extension Development Host opens
+`examples/starlog`, and **Dataform DAG: Show Graph** draws it. `npm run package -w dataform-dag`
+builds a `.vsix`. Releases go out through `.github/workflows/publish.yml`, and
+[`PUBLISHING.md`](.github/workflows/PUBLISHING.md) covers the one-time setup.
+
+`CLAUDE.md` lists the invariants that must not regress.
+
+### Layout
 
 ```
 dataform-dag/
@@ -29,7 +78,7 @@ The UI reaches its host only through the `HostBridge` interface (`packages/ui/sr
 In the extension that's `VsCodeBridge`, which talks `postMessage` to the webview. Under
 `npm run dev:ui` it's `MockBridge`, so the canvas can be worked on in a browser without VS Code.
 
-## How the graph is built
+### How the graph is built
 
 The graph always comes from `dataform compile --json` (`compileDataformProject` in core), so it's
 exactly what Dataform resolves: inline `config.assertions`, object-form refs, and refs built in JS
@@ -44,21 +93,3 @@ the status pill says what broke. The webview and the tree view both subscribe to
 The CLI is found via the `dataformDag.cliPath` setting, then the project's own
 `node_modules/.bin/dataform`, then `dataform` on `PATH`. A compile that fails reports its
 `graphErrors` one line per file instead of the CLI's raw stderr.
-
-## Develop
-
-```bash
-npm install          # from the repo root (npm workspaces)
-npm run build:core   # ui + the extension depend on core's build output — run this first
-npm run typecheck
-npm test             # all workspaces (core + ui + extension)
-npm run dev:ui       # the shared UI alone, against a mock 18-node graph
-```
-
-To run the extension, open the repo root in VS Code and start `npm run watch -w dataform-dag`.
-Then press F5 to launch the **Run Extension** configuration. The Extension Development Host opens
-`examples/starlog`, and **Dataform DAG: Show Graph** draws it. `npm run package -w dataform-dag`
-builds a `.vsix`. Releases go out through `.github/workflows/publish.yml`, and
-[`PUBLISHING.md`](.github/workflows/PUBLISHING.md) covers the one-time setup.
-
-`CLAUDE.md` lists the invariants that must not regress.
