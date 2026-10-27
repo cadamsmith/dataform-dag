@@ -5,9 +5,9 @@ right inside VS Code. The graph comes straight from `dataform compile`, run loca
 background — **no warehouse connection and no cloud**, and exactly the graph Dataform itself sees,
 including inline assertions and refs built in JavaScript.
 
-<img alt="image" src="https://github.com/user-attachments/assets/3d1dfb01-788e-4384-9f75-b36057dc909a" />
+<img alt="The DAG canvas in VS Code"  src="https://github.com/user-attachments/assets/7ed2ba55-085a-4469-a7ff-856ef50cc34f" />
 
-## Features
+## features
 
 - **See the whole graph at a glance.** Every model, source, view, and assertion in your project,
   laid out left-to-right by dependency with a color-coded legend and a minimap for large projects.
@@ -45,7 +45,7 @@ including inline assertions and refs built in JavaScript.
 - **Same name, different schema.** Two actions that share a name, like `staging.orders` and
   `marts.orders`, stay separate nodes, labelled with their schema.
 
-## Getting started
+## getting started
 
 1. Open a Dataform project folder in VS Code (one with a `workflow_settings.yaml` or
    `dataform.json`). The extension starts compiling it right away.
@@ -56,13 +56,13 @@ including inline assertions and refs built in JavaScript.
 There's a second command, **Dataform DAG: Show Compiled SQL**: run it while editing a `.sqlx` and
 the graph opens focused on that file's node, with its compiled SQL in the detail panel.
 
-## Node types
+## node types
 
 The legend across the top color-codes each node by its Dataform type:
 
 **source** · **table** · **view** · **incremental** · **assertion** · **operations**
 
-## Requirements
+## requirements
 
 - VS Code `1.90.0` or newer.
 - A Dataform project that compiles.
@@ -70,7 +70,7 @@ The legend across the top color-codes each node by its Dataform type:
   in order: the `dataformDag.cliPath` setting, the project's own `node_modules/.bin/dataform`, then
   `dataform` on your `PATH`. If none is found, the sidebar and canvas tell you how to install it.
 
-## Settings
+## settings
 
 | Setting | Default | |
 | --- | --- | --- |
