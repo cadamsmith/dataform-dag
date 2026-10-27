@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // Standalone dev harness: mounts the UI against a MockBridge so packages/ui runs on its own,
