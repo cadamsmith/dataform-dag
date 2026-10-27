@@ -21,17 +21,31 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@xyflow/react"
         update-types: ["version-update:semver-major"]
+      # vite/vitest majors are a coupled tooling migration; do them by hand
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
     groups:
       react:
         patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       vite-vitest:
-        patterns: ["vite", "vitest", "@vitejs/*"]
+        patterns: ["vite", "vitest", "@vitejs/*", "@vitest/*"]
       dev-minor-patch:
         dependency-type: development
         update-types: [minor, patch]
+        # esbuild is 0.x (minors can break) and builds the single-IIFE webview; own PR
+        exclude-patterns: ["esbuild"]
       prod-minor-patch:
         dependency-type: production
         update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
