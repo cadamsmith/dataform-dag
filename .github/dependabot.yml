@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7          # let fresh releases settle (supply-chain buffer)
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    ignore:
+      - dependency-name: "@types/vscode"   # must track engines.vscode; bump manually
+      - dependency-name: "@dataform-dag/*" # local workspaces
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@xyflow/react"
+        update-types: ["version-update:semver-major"]
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      vite-vitest:
+        patterns: ["vite", "vitest", "@vitejs/*"]
+      dev-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+      prod-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
