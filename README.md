@@ -7,7 +7,7 @@ table's lineage, and jump straight to the code. It stays up to date as you save.
 It runs `dataform compile` on your machine. It needs **no warehouse connection, no cloud and no
 credentials**, and any local Dataform project that compiles works.
 
-<img alt="The DAG canvas in VS Code" src="https://github.com/user-attachments/assets/3d1dfb01-788e-4384-9f75-b36057dc909a" />
+<img alt="The DAG canvas in VS Code"  src="https://github.com/user-attachments/assets/7ed2ba55-085a-4469-a7ff-856ef50cc34f" />
 
 ## Highlights
 
