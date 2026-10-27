@@ -209,6 +209,22 @@ describe("diagnostics", () => {
   });
 });
 
+describe("Mermaid export", () => {
+  it("copies the view on screen", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["core"] }));
+    await screen.findByText("1 of 2 nodes");
+    await userEvent.click(screen.getByRole("button", { name: "Copy as Mermaid" }));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    const text = writeText.mock.calls[0]![0] as string;
+    expect(text).toContain('n0["mid"]:::table');
+    expect(text).not.toContain("src");
+  });
+});
+
 describe("compilation", () => {
   it("surfaces compilation status", async () => {
     const bridge = new MockBridge(graph);

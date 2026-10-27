@@ -24,6 +24,10 @@ including inline assertions and refs built in JavaScript.
   the target icon on a row in the sidebar, and the canvas shows only that node plus everything
   upstream and downstream of it. A stepper narrows it to 1, 2, 3… hops each way; Esc or
   **Exit focus** brings the whole graph back.
+- **Share a diagram.** **Copy as Mermaid** puts the view on screen on the clipboard as a Mermaid
+  flowchart, ready to paste into Markdown on GitHub, GitLab, or Notion. Filters, focus mode, and
+  open folders (as nested subgraphs) carry over, so narrow the view first: Mermaid stops rendering
+  past 500 edges, and the button says so when an export is that big.
 - **Navigate refs in the editor.** Cmd/Ctrl-click a `ref("…")`, a `resolve(…)`, or a
   `dependencies` entry to jump to the action it names, and hover one to see its type,
   description, and how many nodes sit up- and downstream of it. A lens over each action shows its

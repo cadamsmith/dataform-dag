@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CompiledSqlSection, DataformNode, NodeType } from "@dataform-dag/core";
 import { NODE_COLORS } from "./graphToFlow.js";
+import { copyText } from "./clipboard.js";
 import { TypeIcon, type IconKind } from "./TypeIcon.js";
 import { folderPathOf, isFolderId } from "./collapseFolders.js";
 
@@ -171,19 +172,7 @@ function CopyButton({ text, what }: { text: string; what: string }): JSX.Element
     return () => clearTimeout(t);
   }, [copied]);
   const copy = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Some webview/browser setups refuse the async clipboard; the legacy path still works there.
-      const area = document.createElement("textarea");
-      area.value = text;
-      area.style.position = "fixed";
-      area.style.opacity = "0";
-      document.body.appendChild(area);
-      area.select();
-      document.execCommand("copy");
-      area.remove();
-    }
+    await copyText(text);
     setCopied(true);
   };
   return (

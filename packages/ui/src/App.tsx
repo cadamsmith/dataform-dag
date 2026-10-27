@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DataformNode, NodeType } from "@dataform-dag/core";
 import type { CompilationStatus, HostBridge } from "./HostBridge.js";
 import { useHostBridge } from "./useHostBridge.js";
-import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf } from "./graphToFlow.js";
+import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf, type UiNode } from "./graphToFlow.js";
 import { filterGraphWithContext, restrictGraph, tagCounts } from "./filterGraph.js";
 import { depthWithin, lineageOf, lineageThrough } from "./lineage.js";
 import { collapseAssertions, isClusterId, type CollapsedGraph } from "./collapseAssertions.js";
@@ -15,6 +15,8 @@ import {
   isFolderId,
 } from "./collapseFolders.js";
 import { FolderDetailPanel } from "./FolderDetailPanel.js";
+import { MermaidButton } from "./MermaidButton.js";
+import { edgeCount, toMermaid } from "./mermaid.js";
 import { useLayout } from "./useLayout.js";
 import { DagGraph } from "./DagGraph.js";
 import { GraphDiagnostics } from "./GraphDiagnostics.js";
@@ -357,6 +359,23 @@ export function App({ bridge }: AppProps): JSX.Element {
   const typeOf = (id: string): NodeType | undefined =>
     index?.byId.get(id)?.type ?? (isClusterId(id) ? "assertion" : undefined);
 
+  /** The canvas as Mermaid: open folders nest as subgraphs, context and focus roots keep their look. */
+  const exportMermaid = (): { text: string; edges: number } => {
+    const canvas = collapsed!.graph;
+    const folderOf = (node: UiNode): string | null => {
+      if (!folders || !tree) return null;
+      if (isFolderId(node.id)) return folderPathOf(node.id).split("/").slice(0, -1).join("/");
+      const member = collapsed!.members.get(node.id)?.[0]?.id ?? node.id;
+      return tree.folderOfNode.get(member) ?? null;
+    };
+    const text = toMermaid(canvas, {
+      folderOf,
+      context: new Set(contextIds),
+      roots: new Set(rootIds),
+    });
+    return { text, edges: edgeCount(canvas) };
+  };
+
   const changeTags = (next: string[]): void => {
     setSelectedTags(next);
     bridge.send({ type: "setTagFilter", selectedTags: next });
@@ -406,6 +425,9 @@ export function App({ bridge }: AppProps): JSX.Element {
             >
               Collapse all
             </button>
+          )}
+          {!atStart && collapsed && collapsed.graph.nodes.length > 0 && (
+            <MermaidButton build={exportMermaid} />
           )}
           {graph && <GraphDiagnostics issues={graph.issues} onSelectNode={selectAndJump} />}
         </div>
