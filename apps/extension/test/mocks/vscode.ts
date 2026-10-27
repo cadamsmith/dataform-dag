@@ -175,6 +175,10 @@ export function resetMock(): void {
   records.config.clear();
   records.configHandlers.length = 0;
   records.shownDocs.length = 0;
+  providers.definition.length = 0;
+  providers.hover.length = 0;
+  providers.codeLens.length = 0;
+  workspace.documents.clear();
   workspace.workspaceFolders = undefined;
   window.activeTextEditor = undefined;
   vi.clearAllMocks();
@@ -251,6 +255,9 @@ export class RelativePattern {
 
 export const workspace: {
   workspaceFolders: WorkspaceFolder[] | undefined;
+  /** What `openTextDocument` serves, by path. */
+  documents: Map<string, ReturnType<typeof makeDocument>>;
+  openTextDocument: (u: MockUri) => Promise<ReturnType<typeof makeDocument>>;
   createFileSystemWatcher: (glob: string | RelativePattern) => MockWatcher;
   getConfiguration: () => { get: <T>(key: string) => T | undefined };
   onDidChangeConfiguration: (
@@ -260,6 +267,11 @@ export const workspace: {
   ) => MockDisposable;
 } = {
   workspaceFolders: undefined,
+  documents: new Map(),
+  openTextDocument: (u: MockUri) => {
+    const doc = workspace.documents.get(u.fsPath);
+    return doc ? Promise.resolve(doc) : Promise.reject(new Error(`no such file: ${u.fsPath}`));
+  },
   createFileSystemWatcher: vi.fn((glob: string | RelativePattern) => {
     const w = new MockWatcher();
     if (typeof glob === "string") w.glob = glob;
@@ -286,6 +298,72 @@ export const Uri = {
 };
 
 export const ViewColumn = { Active: -1, One: 1 } as const;
+
+export class Position {
+  constructor(
+    public readonly line: number,
+    public readonly character: number,
+  ) {}
+}
+
+export class Range {
+  constructor(
+    public readonly start: Position,
+    public readonly end: Position,
+  ) {}
+}
+
+export class CodeLens {
+  constructor(
+    public readonly range: Range,
+    public readonly command?: { title: string; command: string; tooltip?: string; arguments?: unknown[] },
+  ) {}
+}
+
+export class Hover {
+  constructor(
+    public readonly contents: MarkdownString,
+    public readonly range?: Range,
+  ) {}
+}
+
+/** Providers registered through `languages`, so tests can call them like the editor would. */
+export const providers = {
+  definition: [] as unknown[],
+  hover: [] as unknown[],
+  codeLens: [] as unknown[],
+};
+
+export const languages = {
+  registerDefinitionProvider: vi.fn((_sel: unknown, p: unknown) => {
+    providers.definition.push(p);
+    return { dispose: vi.fn() };
+  }),
+  registerHoverProvider: vi.fn((_sel: unknown, p: unknown) => {
+    providers.hover.push(p);
+    return { dispose: vi.fn() };
+  }),
+  registerCodeLensProvider: vi.fn((_sel: unknown, p: unknown) => {
+    providers.codeLens.push(p);
+    return { dispose: vi.fn() };
+  }),
+};
+
+/** A `TextDocument` over a string: enough for the providers' offset ⇄ position math. */
+export function makeDocument(fsPath: string, text: string) {
+  const lineStarts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
+  return {
+    uri: uri(fsPath),
+    getText: () => text,
+    offsetAt: (p: Position) => lineStarts[p.line]! + p.character,
+    positionAt: (offset: number) => {
+      let line = 0;
+      while (line + 1 < lineStarts.length && lineStarts[line + 1]! <= offset) line++;
+      return new Position(line, offset - lineStarts[line]!);
+    },
+  };
+}
 
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
 

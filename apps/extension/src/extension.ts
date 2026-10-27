@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { InboundMsg, OutboundMsg } from "@dataform-dag/ui";
 import { DagTreeProvider, type TreeEntry, type TreeGrouping } from "./dagTreeProvider.js";
 import { GraphStore, type CompilationState } from "./graphStore.js";
+import { RefNavigation } from "./refNavigation.js";
 
 const COMMAND_SHOW_GRAPH = "dataformDag.showGraph";
 const COMMAND_SHOW_COMPILED_SQL = "dataformDag.showCompiledSql";
@@ -47,6 +48,7 @@ export function activate(context: vscode.ExtensionContext): void {
       treeView.message = treeMessage(state, store.current !== undefined);
     }),
     tree,
+    new RefNavigation(store),
     controller,
     store,
   );

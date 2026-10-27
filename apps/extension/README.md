@@ -24,6 +24,10 @@ including inline assertions and refs built in JavaScript.
   the target icon on a row in the sidebar, and the canvas shows only that node plus everything
   upstream and downstream of it. A stepper narrows it to 1, 2, 3… hops each way; Esc or
   **Exit focus** brings the whole graph back.
+- **Navigate refs in the editor.** Cmd/Ctrl-click a `ref("…")`, a `resolve(…)`, or a
+  `dependencies` entry to jump to the action it names, and hover one to see its type,
+  description, and how many nodes sit up- and downstream of it. A lens over each action shows its
+  upstream/downstream counts; click it to open that action's lineage in the graph.
 - **Browse from the sidebar.** The Dataform DAG icon in the activity bar lists every action in the
   project grouped by type — sources, tables, views, incrementals, assertions, operations — or, from
   the view's title bar, by the folder its file lives in, with each one's tags beside it. Click a row to open its file; the canvas follows along when it's open.

@@ -126,9 +126,9 @@ describe("activate", () => {
   it("registers the activity-bar tree view and disposes everything it owns", () => {
     const context = activateAndShow();
     expect(lastTreeView().id).toBe("dataformDag.nodes");
-    // 7 commands + the tree view + its status subscription + the tree provider + the controller +
-    // the store
-    expect(context.subscriptions).toHaveLength(12);
+    // 7 commands + the tree view + its status subscription + the tree provider + the ref navigation +
+    // the controller + the store
+    expect(context.subscriptions).toHaveLength(13);
   });
 
   it("toggles the tree grouping, persisting it and updating the title-bar context", () => {
