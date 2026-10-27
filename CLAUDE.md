@@ -37,8 +37,12 @@ npm run package -w dataform-dag  # build the .vsix
   (`packages/ui/src/collapseFolders.ts`, `collapseAssertions.ts`, `lineage.ts`). Cluster ids
   (`assertions:<parents>`) and folder ids (`folder:<path>`) are synthetic: they name no file and
   MUST never be sent to a host — `openFile`/`showCompiledSql` always carry a real member node.
-  Folder grouping is off in focus mode and under a tag filter: both are narrow views you asked for
-  node by node. Collapsing before the tag filter
+  Focus mode walks the WHOLE graph, then keeps the tag filter's matches, the roots, and the hidden
+  nodes linking them (`lineageThrough`, drawn as context) — walking the filtered graph lost lineage
+  through untagged nodes. Folder grouping is off in focus mode (node by node, depth-capped); under a
+  tag filter it defaults on only when the matches alone exceed `LARGE_GRAPH`. A node picked from a
+  list (search, diagnostics, panel neighbors) that the filters hide becomes the focus rather than a
+  selection of something undrawn. Collapsing before the tag filter
   would describe assertions that aren't on screen, and a group with no upstream is never collapsed
   because the filter strips refs to dropped nodes.
   Assertion clusters are listed in the detail panel and deliberately NOT expanded in place on the

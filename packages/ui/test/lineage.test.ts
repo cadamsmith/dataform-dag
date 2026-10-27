@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DataformNode, SerializedGraph } from "@dataform-dag/core";
-import { depthWithin, lineageOf } from "../src/lineage.js";
+import { depthWithin, lineageOf, lineageThrough } from "../src/lineage.js";
 import { restrictGraph } from "../src/filterGraph.js";
 
 /**
@@ -78,6 +78,28 @@ describe("lineageOf", () => {
 
   it("ignores a root that isn't in the graph", () => {
     expect(sorted(lineageOf(graph, ["gone"], null).keep)).toEqual([]);
+  });
+});
+
+describe("lineageThrough", () => {
+  it("is the plain lineage with no filter", () => {
+    const plain = lineageOf(graph, ["fct"], null);
+    expect(lineageThrough(graph, ["fct"], null, null).keep).toEqual(plain.keep);
+  });
+
+  it("keeps the matches, the roots, and the hidden nodes linking them, as bridges", () => {
+    // Only src and report match: stg links src to fct, agg links fct to report.
+    const out = lineageThrough(graph, ["fct"], null, new Set(["src", "report"]));
+    expect([...out.keep].sort()).toEqual(["agg", "fct", "report", "src", "stg"]);
+    expect([...out.bridges].sort()).toEqual(["agg", "stg"]);
+    expect(out.upstream).toBe(2);
+    expect(out.downstream).toBe(2);
+  });
+
+  it("drops a hidden branch that leads to no match", () => {
+    const out = lineageThrough(graph, ["fct"], null, new Set(["stg"]));
+    expect([...out.keep].sort()).toEqual(["fct", "stg"]);
+    expect(out.bridges.size).toBe(0);
   });
 });
 

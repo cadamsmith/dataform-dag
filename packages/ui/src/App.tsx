@@ -4,7 +4,7 @@ import type { CompilationStatus, HostBridge } from "./HostBridge.js";
 import { useHostBridge } from "./useHostBridge.js";
 import { NODE_COLORS, downstreamOf, indexGraph, upstreamOf } from "./graphToFlow.js";
 import { filterGraphWithContext, restrictGraph, tagCounts } from "./filterGraph.js";
-import { depthWithin, lineageOf } from "./lineage.js";
+import { depthWithin, lineageOf, lineageThrough } from "./lineage.js";
 import { collapseAssertions, isClusterId, type CollapsedGraph } from "./collapseAssertions.js";
 import {
   ancestorsOf,
@@ -66,7 +66,7 @@ export function App({ bridge }: AppProps): JSX.Element {
   const [lineageDepth, setLineageDepth] = useState<number | null>(null);
   /** The user asked for the whole of a large project anyway. */
   const [showAll, setShowAll] = useState(false);
-  /** Group by folder, once the user has said; until then it's on for a large project. */
+  /** Group by folder, once the user has said; until then it's on whenever there's a lot to draw. */
   const [folderChoice, setFolderChoice] = useState<boolean | null>(null);
   /** Folder paths opened up on the canvas; any folder not in here is drawn as one node. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_FOLDERS);
@@ -82,37 +82,45 @@ export function App({ bridge }: AppProps): JSX.Element {
   const tags = useMemo(() => (graph ? tagCounts(graph) : NO_TAGS), [graph]);
   const tree = useMemo(() => (graph ? folderTree(graph.nodes) : null), [graph]);
   const isLarge = !!graph && graph.nodes.length > LARGE_GRAPH;
-  const groupFolders = (folderChoice ?? isLarge) && !!tree?.hasFolders;
   const tagFiltered = useMemo(
     () => (graph ? filterGraphWithContext(graph, selectedTags, showContext) : null),
     [graph, selectedTags, showContext],
   );
   const visibleGraph = tagFiltered?.graph ?? null;
-  const context = tagFiltered?.context ?? NO_CONTEXT;
-  // Focus mode narrows the tag-filtered graph further, to the focused node's lineage. It is computed
-  // on what the tag filter left, so a root the filter hides means focus has nothing to show — the
-  // effect below then leaves focus mode rather than drawing an empty canvas.
+  // Grouping follows how much is about to be drawn, not the project's size: a broad tag on a big
+  // project is as dense as no tag at all, and a narrow one reads best node by node.
+  const crowded = selectedTags.length > 0 ? (visibleGraph?.nodes.length ?? 0) > LARGE_GRAPH : isLarge;
+  const groupFolders = (folderChoice ?? crowded) && !!tree?.hasFolders;
+  // Focus mode walks the WHOLE graph and then keeps what the tag filter shows, plus the roots and the
+  // hidden nodes linking the two (drawn as context). Walking the filtered graph lost anything reached
+  // only through an untagged node, and a filter that hid the root used to end focus mode outright.
   const focused = useMemo(() => {
-    if (!lineage || !visibleGraph) return null;
-    const present = new Set(visibleGraph.nodes.map((n) => n.id));
+    if (!lineage || !graph || !visibleGraph) return null;
+    const present = new Set(graph.nodes.map((n) => n.id));
     if (!lineage.every((id) => present.has(id))) return null;
-    const all = lineageOf(visibleGraph, lineage, null);
-    const shown = lineageDepth === null ? all : lineageOf(visibleGraph, lineage, lineageDepth);
-    return { shown, maxDepth: all.hops, graph: restrictGraph(visibleGraph, shown.keep) };
-  }, [lineage, lineageDepth, visibleGraph]);
+    const filter = selectedTags.length > 0 ? new Set(visibleGraph.nodes.map((n) => n.id)) : null;
+    const shown = lineageThrough(graph, lineage, lineageDepth, filter);
+    const maxDepth = lineageOf(graph, lineage, null).hops;
+    return { shown, maxDepth, graph: restrictGraph(graph, shown.keep) };
+  }, [lineage, lineageDepth, graph, visibleGraph, selectedTags.length]);
+  // Only a recompile that removed the focused node can leave focus with nothing to show.
   useEffect(() => {
-    if (lineage && visibleGraph && !focused) setLineage(null);
-  }, [lineage, visibleGraph, focused]);
+    if (lineage && graph && !focused) setLineage(null);
+  }, [lineage, graph, focused]);
+  const context = useMemo(() => {
+    const fromTags = tagFiltered?.context ?? NO_CONTEXT;
+    const bridges = focused?.shown.bridges;
+    return bridges && bridges.size > 0 ? new Set([...fromTags, ...bridges]) : fromTags;
+  }, [tagFiltered, focused]);
   // A large project with no folders to group and nothing chosen yet draws nothing: no layout runs
   // until the user picks a node, a tag, or "show all". Every way out of focus mode lands back here.
   const atStart =
     isLarge && !showAll && !focused && selectedTags.length === 0 && !groupFolders;
   const shownGraph = atStart ? null : (focused?.graph ?? visibleGraph);
   // filter (tags → lineage) → collapse folders → collapse assertions → layout. Collapsing after the
-  // filters is what keeps a group describing only what is still on screen. Neither a tag filter nor
-  // focus mode is folder-grouped: each is already a narrow view you asked for, node by node (and the
-  // tag filter's context marking only knows real nodes).
-  const foldering = groupFolders && !focused && selectedTags.length === 0;
+  // filters is what keeps a group describing only what is still on screen. Focus mode is never
+  // folder-grouped: it is a view you asked for node by node, and its depth already caps its size.
+  const foldering = groupFolders && !focused;
   const folders = useMemo(
     () => (shownGraph && tree && foldering ? collapseFolders(shownGraph, tree, expanded) : null),
     [shownGraph, tree, foldering, expanded],
@@ -156,6 +164,30 @@ export function App({ bridge }: AppProps): JSX.Element {
     if (clusterId) setSelection({ canvasId: clusterId, memberId: selection!.canvasId });
   }, [selection, collapsed]);
 
+  // A selection the filters now hide is dropped: its panel would describe a node that isn't drawn,
+  // and its Focus button would focus something you can't see. (The start screen draws nothing and
+  // keeps the selection, so leaving focus there still remembers it.)
+  useEffect(() => {
+    if (!selection || !shownGraph || !index) return;
+    const id = selection.memberId ?? selection.canvasId;
+    if (index.byId.has(id) && !shownGraph.nodes.some((n) => n.id === id)) setSelection(null);
+  }, [selection, shownGraph, index]);
+
+  // Leaving focus lands back on folders; open the ones above the selection so it is still drawn
+  // (a focus entered from the editor or the start screen never opened them).
+  const wasFocused = useRef(false);
+  useEffect(() => {
+    if (lineage) {
+      wasFocused.current = true;
+      return;
+    }
+    if (!wasFocused.current) return;
+    wasFocused.current = false;
+    if (selection) reveal(selection.memberId ?? selection.canvasId);
+    // Only the transition out of focus drives this; reveal and selection are read as they are then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineage]);
+
   /** Expand every folder above a node, so it is drawn itself. */
   const reveal = (nodeId: string): void => {
     const path = tree?.folderOfNode.get(nodeId);
@@ -193,6 +225,9 @@ export function App({ bridge }: AppProps): JSX.Element {
       enterFocus([focusRequest.nodeId], focusRequest.nodeId);
       return;
     }
+    // A file the filters hide has nothing to pan to. Jumping anyway left the jump pending, and it
+    // fired out of nowhere once a later filter change drew the node.
+    if (!isDrawn(focusRequest.nodeId)) return;
     jumpTo(focusRequest.nodeId);
     const clusterId = collapsed?.clusterOf.get(focusRequest.nodeId);
     if (clusterId) setSelection({ canvasId: clusterId, memberId: focusRequest.nodeId });
@@ -208,15 +243,25 @@ export function App({ bridge }: AppProps): JSX.Element {
     return canvasId === jump.nodeId ? jump : { nodeId: canvasId, nonce: jump.nonce };
   }, [jump, folders, collapsed]);
 
-  /** Search picks a node to look at: select it AND bring it into view. */
-  const selectAndJump = (nodeId: string): void => {
-    if (atStart) {
+  /** Whether a real node is on the canvas, possibly inside a collapsed folder or cluster. */
+  const isDrawn = (nodeId: string): boolean => !!shownGraph?.nodes.some((n) => n.id === nodeId);
+
+  /**
+   * Picking a node from a list (search, diagnostics, a panel's neighbors) must end with it on
+   * screen. One the filters hide (or the start screen) becomes the focus instead: focus mode draws
+   * its root whatever the tag filter says, so the filter itself is left alone.
+   */
+  const pick = (nodeId: string, pan: boolean): void => {
+    if (!isDrawn(nodeId)) {
       enterFocus([nodeId], nodeId);
       return;
     }
     select(nodeId);
-    jumpTo(nodeId);
+    if (pan) jumpTo(nodeId);
   };
+  /** Search picks a node to look at: select it AND bring it into view. */
+  const selectAndJump = (nodeId: string): void => pick(nodeId, true);
+  const selectListed = (nodeId: string): void => pick(nodeId, false);
 
   /**
    * Enter focus mode on what's on the canvas: a cluster focuses all of its members together (they
@@ -236,7 +281,7 @@ export function App({ bridge }: AppProps): JSX.Element {
   /** Starts unbounded unless that would draw a large project's worth of nodes — see LARGE_GRAPH. */
   const enterFocus = (ids: string[], canvasId: string): void => {
     setLineage(ids);
-    setLineageDepth(visibleGraph ? depthWithin(visibleGraph, ids, LARGE_GRAPH) : null);
+    setLineageDepth(graph ? depthWithin(graph, ids, LARGE_GRAPH) : null);
     setSelection({ canvasId, memberId: null });
   };
   const exitFocus = (): void => setLineage(null);
@@ -276,13 +321,14 @@ export function App({ bridge }: AppProps): JSX.Element {
       lineage && focused ? [...new Set(lineage.map((id) => collapsed?.clusterOf.get(id) ?? id))] : NO_IDS,
     [lineage, focused, collapsed],
   );
-  /** Canvas nodes drawn as context: a cluster only when every assertion in it is context. */
+  /** Canvas nodes drawn as context: a cluster or folder only when everything in it is context. */
   const contextIds = useMemo(() => {
     if (context.size === 0 || !collapsed) return NO_IDS;
+    const membersOf = (id: string) => collapsed.members.get(id) ?? folders?.members.get(id);
     return collapsed.graph.nodes
-      .filter((n) => (collapsed.members.get(n.id)?.map((m) => m.id) ?? [n.id]).every((id) => context.has(id)))
+      .filter((n) => (membersOf(n.id)?.map((m) => m.id) ?? [n.id]).every((id) => context.has(id)))
       .map((n) => n.id);
-  }, [context, collapsed]);
+  }, [context, collapsed, folders]);
 
   const isFocusRoot = (ids: string[]): boolean =>
     !!lineage && lineage.length === ids.length && ids.every((id) => lineage.includes(id));
@@ -331,14 +377,15 @@ export function App({ bridge }: AppProps): JSX.Element {
         <div className="ddag-topbar__tools">
           {graph && <NodeSearch nodes={graph.nodes} onSelect={selectAndJump} />}
           <TagFilter tagCounts={tags} selectedTags={selectedTags} onChange={changeTags} />
-          {tree?.hasFolders && !focused && selectedTags.length === 0 && (
+          {tree?.hasFolders && !focused && (
             <button
               type="button"
               className={`ddag-tool ddag-switch${groupFolders ? " is-on" : ""}`}
               aria-pressed={groupFolders}
               onClick={() => {
-                // Turning grouping off on a large project is asking to see all of it.
-                if (groupFolders && isLarge) setShowAll(true);
+                // Turning grouping off on a large project is asking to see all of it (under a tag,
+                // just all of the matches).
+                if (groupFolders && isLarge && selectedTags.length === 0) setShowAll(true);
                 setFolderChoice(!groupFolders);
                 setSelection(null);
               }}
@@ -365,10 +412,19 @@ export function App({ bridge }: AppProps): JSX.Element {
         <div className="ddag-topbar__meta">
           {shownGraph && <Legend nodes={shownGraph.nodes} />}
           {graph && (
-            <span className="ddag-topbar__count">
-              {!collapsed || collapsed.graph.nodes.length === graph.nodes.length
+            // Counts real nodes left by the filters. Grouping only packs them into fewer boxes, so
+            // counting boxes made a fully shown project read as "594 of 1501", as if most were hidden.
+            <span
+              className="ddag-topbar__count"
+              title={
+                collapsed && shownGraph && collapsed.graph.nodes.length < shownGraph.nodes.length
+                  ? `Drawn as ${collapsed.graph.nodes.length} boxes: assertions and folders are grouped`
+                  : undefined
+              }
+            >
+              {!shownGraph || shownGraph.nodes.length === graph.nodes.length
                 ? `${graph.nodes.length} nodes`
-                : `${collapsed.graph.nodes.length} of ${graph.nodes.length} nodes`}
+                : `${shownGraph.nodes.length} of ${graph.nodes.length} nodes`}
             </span>
           )}
           <CompileStatus
@@ -414,6 +470,13 @@ export function App({ bridge }: AppProps): JSX.Element {
               followsEditor={capabilities.focusOnActive}
               onShowAll={() => setShowAll(true)}
             />
+          ) : shownGraph?.nodes.length === 0 && selectedTags.length > 0 ? (
+            // Only a restored filter can get here: its tags no longer exist after a recompile.
+            <div className="ddag-empty">
+              <div className="ddag-empty__box ddag-empty__box--quiet">
+                No nodes carry {selectedTags.length > 1 ? "any of the selected tags" : `the tag “${selectedTags[0]}”`}.
+              </div>
+            </div>
           ) : flow ? (
             <DagGraph
               graph={flow}
@@ -439,7 +502,7 @@ export function App({ bridge }: AppProps): JSX.Element {
             upstream={folderNeighbors?.upstream ?? []}
             downstream={folderNeighbors?.downstream ?? []}
             typeOf={typeOf}
-            onSelect={select}
+            onSelect={selectListed}
             onExpand={() => expandFolder(selection.canvasId)}
             onCollapseParent={(() => {
               const parent = expandedAbove(folderPathOf(selection.canvasId));
@@ -455,7 +518,7 @@ export function App({ bridge }: AppProps): JSX.Element {
             downstream={clusterNeighbors?.downstream ?? []}
             typeOf={typeOf}
             highlightedId={selection.memberId}
-            onSelect={select}
+            onSelect={selectListed}
             onClose={() => select(null)}
             onFocus={
               isFocusRoot(clusterMembers.map((m) => m.id))
@@ -474,7 +537,7 @@ export function App({ bridge }: AppProps): JSX.Element {
             upstream={upstreamOf(index, selected.id)}
             downstream={downstreamOf(index, selected.id)}
             typeOf={typeOf}
-            onSelect={select}
+            onSelect={selectListed}
             onClose={() => select(null)}
             onFocus={isFocusRoot([selected.id]) ? undefined : () => focusOn(selected.id)}
             folder={(() => {

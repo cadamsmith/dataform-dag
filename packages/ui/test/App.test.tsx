@@ -36,6 +36,9 @@ vi.mock("../src/DagGraph.js", () => ({
 import { App, LARGE_GRAPH } from "../src/App.js";
 import { MockBridge } from "../src/MockBridge.js";
 
+/** How many boxes the (stubbed) canvas draws: a cluster or folder is one. */
+const boxes = () => screen.queryAllByRole("button", { name: /^select:/ }).length;
+
 const graph: SerializedGraph = {
   nodes: [
     { id: "src", filePath: "def/src.sqlx", type: "source", tags: [], refs: [] },
@@ -166,6 +169,14 @@ describe("tag filter", () => {
     expect(screen.getByText("+1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "select:src" })).toHaveAttribute("data-context", "true");
     expect(screen.getByRole("button", { name: "select:mid" })).not.toHaveAttribute("data-context");
+  });
+
+  it("says so when a restored tag matches nothing", async () => {
+    const bridge = new MockBridge(graph);
+    render(<App bridge={bridge} />);
+    await screen.findByText("2 nodes");
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["gone"] }));
+    expect(await screen.findByText(/No nodes carry the tag “gone”/)).toBeInTheDocument();
   });
 
   it("restores a filter the host persisted", async () => {
@@ -351,11 +362,12 @@ describe("assertion grouping", () => {
   };
   const CLUSTER = "assertions:fct";
 
-  it("draws one node for assertions in the same position and counts it against the total", async () => {
+  it("draws one node for assertions in the same position and still counts every node", async () => {
     render(<App bridge={new MockBridge(withAssertions)} />);
     expect(await screen.findByRole("button", { name: `select:${CLUSTER}` })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "select:assert_rows" })).not.toBeInTheDocument();
-    expect(screen.getByText("3 of 4 nodes")).toBeInTheDocument();
+    expect(screen.getByText("4 nodes")).toBeInTheDocument();
+    expect(boxes()).toBe(3);
   });
 
   it("lists the members, with per-member file actions", async () => {
@@ -380,7 +392,7 @@ describe("assertion grouping", () => {
 
   it("finds a collapsed assertion by name and calls it out inside the cluster", async () => {
     render(<App bridge={new MockBridge(withAssertions)} />);
-    await screen.findByText("3 of 4 nodes");
+    await screen.findByText("4 nodes");
     await userEvent.type(screen.getByRole("combobox", { name: "Find a node" }), "unique");
     await userEvent.click(screen.getByRole("option", { name: /assert_unique/ }));
 
@@ -394,7 +406,7 @@ describe("assertion grouping", () => {
   it("opens the cluster when the host focuses a collapsed assertion", async () => {
     const bridge = new MockBridge(withAssertions);
     render(<App bridge={bridge} />);
-    await screen.findByText("3 of 4 nodes");
+    await screen.findByText("4 nodes");
 
     act(() => bridge.emit({ type: "focusNode", nodeId: "assert_rows" }));
 
@@ -460,7 +472,7 @@ describe("focus mode", () => {
     await userEvent.click(within(screen.getByRole("complementary")).getByRole("button", { name: "Focus" }));
 
     // stg, src, fct, agg and the 2-assertion cluster: lone is gone.
-    expect(await screen.findByText("5 of 7 nodes")).toBeInTheDocument();
+    expect(await screen.findByText("6 of 7 nodes")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "select:lone" })).not.toBeInTheDocument();
     expect(within(focusBar()!).getByText("stg")).toBeInTheDocument();
     expect(within(focusBar()!).getByText("1 upstream, 4 downstream")).toBeInTheDocument();
@@ -468,7 +480,7 @@ describe("focus mode", () => {
     expect(within(screen.getByRole("complementary")).queryByRole("button", { name: "Focus" })).toBeNull();
 
     await userEvent.click(within(focusBar()!).getByRole("button", { name: "Exit focus" }));
-    expect(await screen.findByText("6 of 7 nodes")).toBeInTheDocument();
+    expect(await screen.findByText("7 nodes")).toBeInTheDocument();
     expect(focusBar()).toBeNull();
   });
 
@@ -500,33 +512,58 @@ describe("focus mode", () => {
     render(<App bridge={new MockBridge(chain)} />);
     await userEvent.click(await screen.findByRole("button", { name: "focus:assertions:fct" }));
     // Both assertions (still one cluster) plus fct, stg, src.
-    expect(await screen.findByText("4 of 7 nodes")).toBeInTheDocument();
+    expect(await screen.findByText("5 of 7 nodes")).toBeInTheDocument();
     expect(within(focusBar()!).getByText("2 assertions")).toBeInTheDocument();
   });
 
   it("enters focus mode when the host asks", async () => {
     const bridge = new MockBridge(chain);
     render(<App bridge={bridge} />);
-    await screen.findByText("6 of 7 nodes");
+    await screen.findByText("7 nodes");
     act(() => bridge.emit({ type: "focusLineage", nodeId: "fct" }));
-    expect(await screen.findByText("5 of 7 nodes")).toBeInTheDocument();
+    expect(await screen.findByText("6 of 7 nodes")).toBeInTheDocument();
     expect(within(screen.getByRole("complementary")).getByRole("heading", { name: "fct" })).toBeInTheDocument();
   });
 
-  it("leaves focus mode when a tag filter hides the focused node", async () => {
+  it("stays in focus under a tag filter that hides the root, linking it to the matches", async () => {
     const bridge = new MockBridge(chain);
     render(<App bridge={bridge} />);
     await userEvent.click(await screen.findByRole("button", { name: "focus:fct" }));
-    await screen.findByText("5 of 7 nodes");
+    await screen.findByText("6 of 7 nodes");
     act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["raw"] }));
-    expect(await screen.findByText("1 of 7 nodes")).toBeInTheDocument();
-    expect(focusBar()).toBeNull();
+    // fct (the root), src (the match), and stg between them, drawn as context.
+    expect(await screen.findByText("3 of 7 nodes")).toBeInTheDocument();
+    expect(focusBar()).not.toBeNull();
+    expect(screen.getByRole("button", { name: "select:stg" })).toHaveAttribute("data-context", "true");
+    expect(screen.getByRole("button", { name: "select:src" })).not.toHaveAttribute("data-context");
+  });
+
+  it("focuses a searched node the tag filter hides, keeping the filter", async () => {
+    const bridge = new MockBridge(chain);
+    render(<App bridge={bridge} />);
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["core"] }));
+    await screen.findByText("1 of 7 nodes");
+    await userEvent.type(screen.getByRole("combobox", { name: "Find a node" }), "agg{Enter}");
+    // agg and its tagged upstream fct; stg and src lead to no match.
+    expect(await screen.findByText("2 of 7 nodes")).toBeInTheDocument();
+    expect(within(focusBar()!).getByText("agg")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove tag core" })).toBeInTheDocument();
+  });
+
+  it("drops a selection the tag filter hides", async () => {
+    const bridge = new MockBridge(chain);
+    render(<App bridge={bridge} />);
+    await userEvent.click(await screen.findByRole("button", { name: "select:stg" }));
+    expect(screen.getByRole("complementary")).toBeInTheDocument();
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["core"] }));
+    await screen.findByText("1 of 7 nodes");
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 
   it("an Escape that closes the tag menu stays in focus mode", async () => {
     render(<App bridge={new MockBridge(chain)} />);
     await userEvent.click(await screen.findByRole("button", { name: "focus:fct" }));
-    await screen.findByText("5 of 7 nodes");
+    await screen.findByText("6 of 7 nodes");
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
     // Move off the tag search field, so the Escape isn't ignored for coming from an input.
     await userEvent.click(screen.getByRole("dialog", { name: "Filter by tag" }));
@@ -658,7 +695,10 @@ describe("App, grouped by folder", () => {
   it("opens a large project on its top-level folders", async () => {
     render(<App bridge={new MockBridge(foldered)} />);
     // core/, agencies/, and the root file.
-    expect(await screen.findByText(`3 of ${folderedCount} nodes`)).toBeInTheDocument();
+    await screen.findByRole("button", { name: "select:folder:agencies" });
+    // Every node is still there, packed into three boxes.
+    expect(screen.getByText(`${folderedCount} nodes`)).toBeInTheDocument();
+    expect(boxes()).toBe(3);
     expect(screen.getByRole("button", { name: "focus:folder:agencies" })).toBeInTheDocument();
     expect(screen.queryByText(/pick a place to start/)).toBeNull();
   });
@@ -671,12 +711,13 @@ describe("App, grouped by folder", () => {
     expect(screen.queryByRole("button", { name: "select:folder:agencies" })).toBeNull();
     const panel = screen.getByRole("complementary");
     await userEvent.click(within(panel).getByRole("button", { name: "Collapse agencies/" }));
-    expect(await screen.findByText(`3 of ${folderedCount} nodes`)).toBeInTheDocument();
+    await screen.findByRole("button", { name: "select:folder:agencies" });
+    expect(boxes()).toBe(3);
   });
 
   it("opens the folders above a searched node", async () => {
     render(<App bridge={new MockBridge(foldered)} />);
-    await screen.findByText(`3 of ${folderedCount} nodes`);
+    await screen.findByRole("button", { name: "select:folder:agencies" });
     await userEvent.type(screen.getByRole("combobox", { name: "Find a node" }), "model_7{Enter}");
     expect(await screen.findByRole("button", { name: "select:model_7" })).toBeInTheDocument();
     const panel = screen.getByRole("complementary");
@@ -688,7 +729,7 @@ describe("App, grouped by folder", () => {
   it("still starts from the opened file's lineage, ungrouped", async () => {
     const bridge = new MockBridge(foldered);
     render(<App bridge={bridge} />);
-    await screen.findByText(`3 of ${folderedCount} nodes`);
+    await screen.findByRole("button", { name: "select:folder:agencies" });
     act(() => bridge.emit({ type: "startFrom", nodeId: "model_4" }));
     expect(await screen.findByRole("button", { name: "select:model_4" })).toBeInTheDocument();
     expect(screen.getByText(`2 of ${folderedCount} nodes`)).toBeInTheDocument();
@@ -702,9 +743,36 @@ describe("App, grouped by folder", () => {
     expect(bridge.sent.filter((m) => "nodeId" in m && String(m.nodeId).startsWith("folder:"))).toEqual([]);
   });
 
+  it("opens the folders above the selection on leaving focus", async () => {
+    const bridge = new MockBridge(foldered);
+    render(<App bridge={bridge} />);
+    await screen.findByRole("button", { name: "select:folder:agencies" });
+    act(() => bridge.emit({ type: "focusLineage", nodeId: "model_4" }));
+    await screen.findByText(`2 of ${folderedCount} nodes`);
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("button", { name: "select:model_4" })).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary")).getByRole("heading", { name: "model_4" })).toBeInTheDocument();
+  });
+
+  it("groups a broad tag's matches by folder, and draws a narrow one node by node", async () => {
+    const tagged: SerializedGraph = {
+      ...foldered,
+      nodes: foldered.nodes.map((n) => ({ ...n, tags: n.id === "model_3" ? ["all", "one"] : ["all"] })),
+    };
+    const bridge = new MockBridge(tagged);
+    render(<App bridge={bridge} />);
+    await screen.findByRole("button", { name: "select:folder:agencies" });
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["all"] }));
+    expect(await screen.findByRole("button", { name: "select:folder:agencies" })).toBeInTheDocument();
+    act(() => bridge.emit({ type: "tagFilterState", selectedTags: ["one"] }));
+    expect(await screen.findByRole("button", { name: "select:model_3" })).toBeInTheDocument();
+    // Still the user's call either way.
+    expect(screen.getByRole("button", { name: "Group by folder" })).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("shows every node when grouping is turned off", async () => {
     render(<App bridge={new MockBridge(foldered)} />);
     await userEvent.click(await screen.findByRole("button", { name: "Group by folder" }));
-    expect(await screen.findByText(`${folderedCount} nodes`)).toBeInTheDocument();
+    await waitFor(() => expect(boxes()).toBe(LARGE_GRAPH + 2));
   });
 });

@@ -227,6 +227,11 @@ function DagCanvas({
         source: e.source,
         target: e.target,
         type: "dag",
+        // React Flow tags every edge `nopan`, so a drag that starts on one would never pan. Edges
+        // here have nothing to click: unselectable + unfocusable earns them RF's `inactive` class
+        // (pointer-events: none), and the press falls through to the pane.
+        selectable: false,
+        focusable: false,
       })),
     );
 
